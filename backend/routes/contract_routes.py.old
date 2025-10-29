@@ -1,0 +1,491 @@
+from flask import Blueprint, request, jsonify, session
+from data.contracts_data import CONTRACTS
+from models import Chat, Mensaje
+from uuid import uuid4
+import logging
+import json
+import spacy
+from textdistance import cosine
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+contract_bp = Blueprint("contract_bp", __name__)
+SESSION_KEY = "contract_context"
+
+# ----------------------------
+# Constantes y utilidades
+# ----------------------------
+DEF_AFFIRMATIVES = {"si", "sí", "s", "ok", "claro", "confirmo", "confirmar", "dale", "vamos", "start", "comenzar", "yes"}
+DEF_NEGATIVES = {"no", "n", "negativo", "cancelar", "otra", "cambiar", "not", "nope"}
+CHANGE_KEYWORDS = {"cambiar", "cambio", "otro", "otra", "quiero otro", "quiero cambiar"}
+
+def texto_semantico(text):
+    # Solo aplica NLP si el texto tiene más de 2 palabras
+    if not text or len(text.split()) <= 2:
+        return texto_normalizado(text)
+    doc = nlp(text.strip())
+    lemmas = ' '.join([token.lemma_.lower() for token in doc])
+    return lemmas
+
+def texto_normalizado(texto):
+    return (texto or "").strip().lower()
+
+def es_afirmativo(texto):
+    txt = texto_normalizado(texto)
+    return txt in DEF_AFFIRMATIVES or txt.startswith("si ")
+
+def es_negativo(texto):
+    txt = texto_normalizado(texto)
+    return txt in DEF_NEGATIVES or txt.startswith("no ")
+
+def contiene_cambio(texto):
+    txt = texto_normalizado(texto)
+    return any(kw in txt for kw in CHANGE_KEYWORDS)
+
+def listar_campos_para_mostrar(campos):
+    return "\n".join(f"{i}. {c}" for i, c in enumerate(campos, start=1))
+
+def log_context(contexto, mensaje=""):
+    logger.info(f"""
+    Estado actual: {mensaje}
+    Contexto: {json.dumps(contexto, indent=2)}
+    """)
+
+# ----------------------------
+# Detector de contratos
+# ----------------------------
+def detectar_contratos(texto_usuario):
+    texto = texto_normalizado(texto_usuario)
+    encontrados = []
+    for key, contrato in CONTRACTS.items():
+        if key in texto:
+            encontrados.append(key); continue
+        nombre = contrato.get("nombre", "").lower()
+        if nombre and nombre in texto:
+            encontrados.append(key); continue
+        for sinonimo in contrato.get("sinonimos", []):
+            if sinonimo.lower() in texto:
+                encontrados.append(key)
+                break
+    # eliminar duplicados manteniendo orden
+    result = []
+    for k in encontrados:
+        if k not in result:
+            result.append(k)
+    return result
+
+# ----------------------------
+# Ruta principal
+# ----------------------------
+@contract_bp.route('/chat', methods=['POST'])
+def chat():
+    data = request.get_json(force=True, silent=True) or {}
+    message = data.get('message', '')
+    conversation_id = data.get('conversation_id')
+    
+    if not message:
+        return jsonify({"error": "No se recibió ningún mensaje"}), 400
+        
+    try:
+        # Obtener o crear conversación
+        if not conversation_id:
+            conversation = Conversation(
+                id=str(uuid4()),
+                user_id=1,
+                status='active',
+                chat_metadata={  # Actualizado de metadata a chat_metadata
+                    'estado': 'sin_contexto',
+                    'contract_type': None,
+                    'current_step': 0
+                }
+            )
+            db.session.add(conversation)
+        else:
+            conversation = Conversation.query.get(conversation_id)
+            if not conversation:
+                return jsonify({"error": "Conversación no encontrada"}), 404
+
+        # Guardar mensaje del usuario
+        user_message = Message(
+            id=str(uuid4()),
+            conversation_id=conversation.id,
+            role='user',
+            content=message
+        )
+        db.session.add(user_message)
+        
+        # Procesar respuesta
+        response_data = procesar_respuesta(message, conversation)
+        
+        # Guardar respuesta del asistente
+        assistant_message = Message(
+            id=str(uuid4()),
+            conversation_id=conversation.id,
+            role='assistant',
+            content=response_data['message']
+        )
+        db.session.add(assistant_message)
+        
+        db.session.commit()
+        
+        return jsonify({
+            "message": response_data['message'],
+            "conversation_id": conversation.id,
+            "status": conversation.status
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error procesando mensaje: {str(e)}", exc_info=True)
+        return jsonify({"error": "Error en el servidor"}), 500
+
+# ----------------------------
+# Orquestador principal (distribuye por estado)
+# ----------------------------
+def procesar_respuesta(texto_usuario):
+    texto = texto_normalizado(texto_usuario)
+    contexto = session.get(SESSION_KEY)
+    
+    log_context(contexto, f"Mensaje recibido: {texto_usuario}")
+
+    # Crear contexto inicial si no existe
+    if not contexto:
+        contexto = {
+            "id_conversacion": str(uuid4()),
+            "estado": "sin_contexto",
+            "contrato": None,
+            "campos": [],
+            "campo_actual": 0,
+            "respuestas": {},
+            "candidatos": [],
+            "pending_change_confirm": False
+        }
+        session[SESSION_KEY] = contexto
+        session.modified = True  # Forzar guardado de sesión
+        log_context(contexto, "Nuevo contexto creado")
+
+    # 1) Si hay confirmación pendiente por cambio de contrato
+    if contexto.get("pending_change_confirm"):
+        return handle_pending_change_confirmation(texto_usuario, contexto)
+
+    estado = contexto.get("estado")
+
+    # 2) Delegar por estado
+    if estado == "contrato_detectado_sin_confirmar":
+        return handle_confirm_initial(texto_usuario, contexto)
+
+    if estado == "confirmar_campos":
+        return handle_confirm_fields(texto_usuario, contexto)
+
+    if estado == "esperando_seleccion_multiple":
+        return handle_selection_multiple(texto_usuario, contexto)
+
+    if estado == "flujo_en_progreso":
+        return handle_questionnaire_response(texto_usuario, contexto)
+
+    # 3) Estado sin_contexto -> detectar contratos
+    if estado in ("sin_contexto", None):
+        return handle_detection(texto_usuario, contexto)
+
+    # fallback: reiniciar manteniendo id_conversacion
+    contexto.update({
+        "estado": "sin_contexto",
+        "contrato": None,
+        "campos": [],
+        "campo_actual": 0,
+        "respuestas": {},
+        "candidatos": [],
+        "pending_change_confirm": False
+    })
+    session[SESSION_KEY] = contexto
+    return jsonify({"message": "Reinicié el contexto. Indica qué tipo de contrato deseas."}), 200
+
+# ----------------------------
+# Handlers - implementación modular
+# ----------------------------
+def handle_detection(texto_usuario, contexto):
+    encontrados = detectar_contratos(texto_usuario)
+    if len(encontrados) == 0:
+        opciones = ", ".join([f"{CONTRACTS[k]['nombre']}" for k in CONTRACTS.keys()])
+        msg = (
+            "No identifiqué claramente el tipo de contrato en tu mensaje.\n"
+            "Puedo ayudarte con los siguientes contratos:\n"
+            f"{opciones}\n\n"
+            "Indica el tipo que necesitas (por nombre o escribe uno de los sinónimos)."
+        )
+        return jsonify({"message": msg}), 200
+
+    if len(encontrados) == 1:
+        key = encontrados[0]
+        contrato_info = CONTRACTS[key]
+        contexto.update({
+            "estado": "contrato_detectado_sin_confirmar",
+            "contrato": key,
+            "campo_actual": 0,
+            "campos": []
+        })
+        session[SESSION_KEY] = contexto
+        msg = (
+            f"He detectado que quieres elaborar un **{contrato_info['nombre']}**.\n"
+            "¿Deseas que iniciemos ahora? (responde: sí / no / cambiar)"
+        )
+        return jsonify({"message": msg}), 200
+
+    # múltiples coincidencias
+    contexto.update({
+        "estado": "esperando_seleccion_multiple",
+        "candidatos": encontrados
+    })
+    session[SESSION_KEY] = contexto
+    lista = [f"{i}) {CONTRACTS[k]['nombre']}" for i, k in enumerate(encontrados, start=1)]
+    msg = (
+        "He encontrado varias opciones que podrían coincidir con tu mensaje:\n"
+        + "\n".join(lista) +
+        "\n\nPor favor responde con el número de la opción o escribe el nombre del contrato."
+    )
+    return jsonify({"message": msg}), 200
+
+def handle_selection_multiple(texto_usuario, contexto):
+    texto = texto_normalizado(texto_usuario)
+    candidatos = contexto.get("candidatos", [])
+    if texto.isdigit():
+        idx = int(texto) - 1
+        if 0 <= idx < len(candidatos):
+            selected = candidatos[idx]
+            contexto.update({
+                "contrato": selected,
+                "estado": "contrato_detectado_sin_confirmar",
+                "candidatos": []
+            })
+            session[SESSION_KEY] = contexto
+            contrato_info = CONTRACTS[selected]
+            msg = f"Perfecto, elegiste **{contrato_info['nombre']}**. ¿Deseas que iniciemos ahora? (sí / no / cambiar)"
+            return jsonify({"message": msg}), 200
+        else:
+            return jsonify({"message": "Número inválido. Responde con el número de la opción mostrada."}), 200
+
+    # si el usuario escribe nombre o sinónimo que coincide con algún candidato
+    for k in candidatos:
+        nombre = CONTRACTS[k].get("nombre", "").lower()
+        if nombre in texto or k in texto:
+            contexto.update({
+                "contrato": k,
+                "estado": "contrato_detectado_sin_confirmar",
+                "candidatos": []
+            })
+            session[SESSION_KEY] = contexto
+            msg = f"Perfecto, detecté **{CONTRACTS[k]['nombre']}**. ¿Deseas empezar ahora? (sí / no / cambiar)"
+            return jsonify({"message": msg}), 200
+
+    return jsonify({"message": "No identifiqué la opción. Responde con el número o el nombre exacto de la opción."}), 200
+
+def handle_confirm_initial(texto_usuario, contexto):
+    texto = texto_normalizado(texto_usuario)
+    contrato_key = contexto.get("contrato")
+    contrato_info = CONTRACTS.get(contrato_key, {})
+    
+    log_context(contexto, f"Confirmación inicial: {texto_usuario}")
+
+    if es_afirmativo(texto_usuario):
+        campos = contrato_info.get("preguntas") or contrato_info.get("clausulas_minimas") or []
+        contexto.update({
+            "estado": "confirmar_campos",
+            "campos": campos,
+            "campo_actual": 0
+        })
+        session[SESSION_KEY] = contexto
+        session.modified = True  # Forzar guardado de sesión
+        
+        log_context(contexto, "Actualizado a confirmar_campos")
+        
+        if campos:
+            lista_texto = listar_campos_para_mostrar(campos)
+            msg = (
+                "Perfecto. Para elaborar el contrato necesitaré los siguientes datos:\n\n"
+                f"{lista_texto}\n\n"
+                "¿Deseas que proceda a solicitar estos datos uno por uno? (responde: sí / cancelar)"
+            )
+        else:
+            contexto["estado"] = "flujo_en_progreso"
+            session[SESSION_KEY] = contexto
+            session.modified = True
+            msg = "No hay una lista de campos definida. Indica el dato inicial requerido."
+        return jsonify({"message": msg}), 200
+
+    if es_negativo(texto_usuario):
+        # Mantener sesión pero no iniciar
+        contexto.update({
+            "estado": "sin_contexto",
+            "contrato": None,
+            "campos": [],
+            "campo_actual": 0
+        })
+        session[SESSION_KEY] = contexto
+        opciones = ", ".join([f"{CONTRACTS[k]['nombre']}" for k in CONTRACTS.keys()])
+        msg = (
+            "Entendido, no iniciaremos ese contrato por ahora.\n"
+            "Puedo ayudarte con los siguientes contratos:\n"
+            f"{opciones}\n\nIndica cuál deseas (por nombre o sinónimo)."
+        )
+        return jsonify({"message": msg}), 200
+
+    if "cambiar" in texto or "otro" in texto:
+        contexto.update({
+            "estado": "sin_contexto",
+            "contrato": None,
+            "campos": [],
+            "campo_actual": 0
+        })
+        session[SESSION_KEY] = contexto
+        return jsonify({"message": "Está bien. Indica el tipo de contrato que deseas (por nombre o sinónimo)."}), 200
+
+    return jsonify({"message": "Por favor responde con 'sí' para ver la lista de datos y continuar, o 'no' para cancelar."}), 200
+
+def handle_confirm_fields(texto_usuario, contexto):
+    if es_afirmativo(texto_usuario):
+        contexto["estado"] = "flujo_en_progreso"
+        # inicializamos respuestas si no existen
+        if "respuestas" not in contexto:
+            contexto["respuestas"] = {}
+        session[SESSION_KEY] = contexto
+        campos = contexto.get("campos", [])
+        primera = campos[0] if campos else "Indica el dato inicial requerido."
+        msg = f"Perfecto, comenzamos. 1) {primera}"
+        return jsonify({"message": msg}), 200
+
+    if es_negativo(texto_usuario):
+        contexto.update({
+            "estado": "sin_contexto",
+            "contrato": None,
+            "campos": [],
+            "campo_actual": 0
+        })
+        session[SESSION_KEY] = contexto
+        opciones = ", ".join([f"{CONTRACTS[k]['nombre']}" for k in CONTRACTS.keys()])
+        msg = f"Perfecto, no iniciaremos por ahora. Puedes pedirme otro contrato si lo deseas.\nContratos disponibles: {opciones}"
+        return jsonify({"message": msg}), 200
+
+    return jsonify({"message": "Responde por favor 'sí' para que solicite los datos uno por uno, o 'no' para cancelar."}), 200
+
+def handle_pending_change_confirmation(texto_usuario, contexto):
+    if es_afirmativo(texto_usuario):
+        # confirmar cambio: limpiar contrato actual, mantener id_conversacion
+        contexto.update({
+            "estado": "sin_contexto",
+            "contrato": None,
+            "campos": [],
+            "campo_actual": 0,
+            "respuestas": {},
+            "pending_change_confirm": False
+        })
+        session[SESSION_KEY] = contexto
+        return jsonify({"message": "Cambio confirmado. Indica qué tipo de contrato deseas ahora (por nombre o sinónimo)."}), 200
+
+    if es_negativo(texto_usuario):
+        contexto["pending_change_confirm"] = False
+        session[SESSION_KEY] = contexto
+        contrato_key = contexto.get("contrato")
+        contrato_info = CONTRACTS.get(contrato_key, {})
+        campos = contexto.get("campos") or contrato_info.get("preguntas", contrato_info.get("clausulas_minimas", []))
+        idx = contexto.get("campo_actual", 0)
+        siguiente = campos[idx] if idx < len(campos) else "Continuemos."
+        return jsonify({"message": f"Perfecto, continuamos con el proceso. Siguiente pregunta: {siguiente}"}), 200
+
+    return jsonify({"message": "Responde 'sí' para confirmar el cambio o 'no' para continuar con el contrato actual."}), 200
+
+def handle_questionnaire_response(texto_usuario, contexto):
+    # si el usuario solicita cambiar en medio del flujo, pedir confirmación
+    if contiene_cambio(texto_usuario):
+        contexto["pending_change_confirm"] = True
+        session[SESSION_KEY] = contexto
+        return jsonify({"message": "Estás a mitad del proceso. Si cambias de contrato se perderán las respuestas recogidas. ¿Seguro que deseas cambiar? (sí/no)"}), 200
+
+    # comandos de cancelación
+    if texto_normalizado(texto_usuario) in {"cancelar", "abort", "stop"}:
+        contexto.update({
+            "estado": "sin_contexto",
+            "contrato": None,
+            "campos": [],
+            "campo_actual": 0,
+            "respuestas": {}
+        })
+        session[SESSION_KEY] = contexto
+        return jsonify({"message": "Proceso cancelado. Indica qué tipo de contrato necesitas."}), 200
+
+    contrato_key = contexto.get("contrato")
+    contrato_info = CONTRACTS.get(contrato_key, {})
+    campos = contexto.get("campos") or contrato_info.get("preguntas") or contrato_info.get("clausulas_minimas", [])
+    idx = contexto.get("campo_actual", 0)
+    respuestas = contexto.get("respuestas", {})
+
+    # Guardar respuesta al campo actual
+    if idx < len(campos):
+        campo_actual = campos[idx]
+        respuestas[campo_actual] = texto_usuario.strip()
+        contexto["respuestas"] = respuestas
+        contexto["campo_actual"] = idx + 1
+        session[SESSION_KEY] = contexto
+
+        # Si hay más campos, preguntar siguiente
+        if contexto["campo_actual"] < len(campos):
+            siguiente = campos[contexto["campo_actual"]]
+            return jsonify({"message": siguiente}), 200
+        else:
+            # flujo completado
+            contexto["estado"] = "finalizado"
+            session[SESSION_KEY] = contexto
+            resumen = generar_resumen_contrato(contrato_key, contrato_info, respuestas, contexto.get("id_conversacion"))
+            return jsonify({
+                "message": "Hemos recopilado toda la información necesaria. Aquí tienes un resumen:\n\n" + resumen,
+                "completed": True,
+                "contract_key": contrato_key,
+                "contract_data": respuestas,
+                "id_conversacion": contexto.get("id_conversacion")
+            }), 200
+
+    # fallback
+    contexto.update({
+        "estado": "sin_contexto",
+        "contrato": None,
+        "campos": [],
+        "campo_actual": 0,
+        "respuestas": {}
+    })
+    session[SESSION_KEY] = contexto
+    return jsonify({"message": "Algo no cuadró en el flujo. Reinicié el estado (se mantiene la conversación). Indica nuevamente el contrato que necesitas."}), 200
+
+# ----------------------------
+# Generador de resumen
+# ----------------------------
+def generar_resumen_contrato(key, contrato_info, data, id_conversacion=None):
+    lines = []
+    lines.append(f"Tipo: {contrato_info.get('nombre', key)}")
+    lines.append(f"Validez: {contrato_info.get('validez', 'No especificada')}")
+    lines.append("")
+    lines.append("Datos recopilados:")
+    for campo, valor in data.items():
+        lines.append(f"- {campo}: {valor}")
+    advertencias = contrato_info.get("advertencias", [])
+    if advertencias:
+        lines.append("")
+        lines.append("Advertencias / recomendaciones:")
+        for a in advertencias:
+            lines.append(f"- {a}")
+    alias = contrato_info.get("plantilla_alias")
+    if alias:
+        lines.append("")
+        lines.append(f"Plantilla alias para render: {alias}")
+    if id_conversacion:
+        lines.append("")
+        lines.append(f"ID de conversación: {id_conversacion}")
+    return "\n".join(lines)
+
+@contract_bp.route('/debug-session', methods=['GET'])
+def debug_session():
+    contexto = session.get(SESSION_KEY, {})
+    return jsonify({
+        "session_data": contexto,
+        "session_exists": bool(contexto),
+        "current_state": contexto.get("estado") if contexto else None
+    })

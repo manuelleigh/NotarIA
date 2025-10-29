@@ -1,0 +1,302 @@
+from models import Chat, Mensaje, Usuario
+from database import db
+from datetime import datetime, timezone
+from data.contracts_data import CONTRACTS, DEF_AFFIRMATIVES, DEF_NEGATIVES
+from services.generation_service import formalizar_contrato
+from services.data_processors import PROCESSOR_REGISTRY
+
+
+from services.nlp_utils import get_nlp
+nlp = get_nlp()
+
+def procesar_mensaje(chat_id, texto_usuario, usuario_id):
+    chat = Chat.query.get(chat_id)
+    if not chat:
+        raise ValueError("Chat no encontrado")
+
+    contexto = chat.metadatos or {}
+
+    # 1️. Si aún no se identificó tipo de contrato
+    if "tipo_contrato" not in contexto:
+        tipo = detectar_tipo_contrato(texto_usuario)
+        if tipo:
+            contexto["tipo_contrato"] = tipo
+            contexto["estado"] = "solicitando_datos"
+            contexto["pregunta_actual"] = 0
+            contexto["respuestas"] = {}
+            respuesta = f"He detectado que deseas elaborar un **{CONTRACTS[tipo]['nombre']}**. ¿Podrías responderme la siguiente pregunta?\n\n{CONTRACTS[tipo]['preguntas'][0]['texto']}"
+        else:
+            respuesta = "¿Podrías especificar qué tipo de contrato deseas elaborar? Ejemplo: arrendamiento, compraventa, prestación de servicios."
+    
+    # 2️. Si ya se está recolectando datos
+    elif contexto.get("estado") == "solicitando_datos":
+        tipo = contexto["tipo_contrato"]
+        i = contexto.get("pregunta_actual", 0)
+        respuestas = contexto.get("respuestas", {})
+        
+        pregunta_actual_info = CONTRACTS[tipo]["preguntas"][i]
+        clave_semantica = pregunta_actual_info["key"]
+        respuestas[clave_semantica] = texto_usuario
+        
+        contexto["respuestas"] = respuestas
+
+        # Pasar a la siguiente pregunta
+        if i + 1 < len(CONTRACTS[tipo]["preguntas"]):
+            contexto["pregunta_actual"] = i + 1
+            siguiente = CONTRACTS[tipo]["preguntas"][i + 1]['texto']
+            respuesta = siguiente
+        else:
+            contexto["estado"] = "revision"
+            respuesta = f"Perfecto. Ya tengo toda la información necesaria para elaborar el contrato de **{CONTRACTS[tipo]['nombre']}**.\n\n¿Deseas que te muestre un resumen antes de generar el documento?"
+            
+    # 3. Si ya se recolecto los datos completamente enviar resumen para confirmar previo a generar el contrato
+    elif contexto.get("estado") == "revision" and es_afirmativo(texto_normalizado(texto_usuario)):
+        tipo = contexto["tipo_contrato"]
+        respuestas = contexto.get("respuestas", {})
+        resumen = f"Has solicitado un contrato de **{CONTRACTS[tipo]['nombre']}** con los siguientes detalles:\n"
+        for idx, pregunta_info in enumerate(CONTRACTS[tipo]["preguntas"]):
+            pregunta_texto = pregunta_info["texto"]
+            pregunta_key = pregunta_info["key"]
+            respuesta_usuario = respuestas.get(pregunta_key, "No proporcionada")
+            resumen += f"- **{idx+1}. {pregunta_texto}**: {respuesta_usuario}\n"
+        resumen += "\n¿Confirmas que toda la información es correcta para generar el contrato preliminar?\nResponde 'sí' para confirmar o 'no' para corregir."
+        respuesta = resumen
+        contexto["estado"] = "preliminar_confirmacion"
+    
+    elif contexto.get("estado") == "preliminar_confirmacion":
+        txt_norm = texto_normalizado(texto_usuario)
+        
+        # Si el usuario confirma, pasamos a generar el contrato preliminar
+        if es_afirmativo(txt_norm):
+            contexto["estado"] = "clausulas_especiales"
+            respuesta = (
+                "Perfecto 👍. Antes de generar el contrato preliminar, "
+                "¿deseas agregar alguna cláusula especial o condición adicional? "
+                "Por ejemplo, penalidades, ampliaciones o condiciones de pago."
+            )
+        
+        # Si el usuario quiere corregir información
+        elif es_negativo(txt_norm):
+            respuesta = "Entendido. ¿Qué información te gustaría corregir o agregar?"
+        
+        # Si no es ni sí ni no, verificar si menciona una pregunta específica
+        else:
+            tipo = contexto["tipo_contrato"]
+            respuestas = contexto.get("respuestas", {})
+            texto_lower = texto_usuario.lower()
+            pregunta_a_modificar = None
+            for idx, pregunta in enumerate(CONTRACTS[tipo]["preguntas"]):
+                if f"pregunta {idx+1}" in texto_lower or f"pregunta{idx+1}" in texto_lower:
+                    pregunta_a_modificar = idx
+                    break
+            if pregunta_a_modificar is not None:
+                contexto["estado"] = "preguntando_modificacion"
+                contexto["pregunta_actual"] = pregunta_a_modificar
+                respuesta = f"Claro, volvamos a la pregunta {pregunta_a_modificar + 1}:\n\n{CONTRACTS[tipo]['preguntas'][pregunta_a_modificar]}"
+            else:
+                respuesta = "No pude identificar qué pregunta deseas modificar. Por favor, indícame el número de la pregunta que quieres cambiar."
+                
+    elif contexto.get("estado") == "clausulas_especiales":
+        txt_norm = texto_normalizado(texto_usuario)
+
+        # Si el usuario no quiere agregar cláusulas
+        if es_negativo(txt_norm):
+            contexto["estado"] = "generando_contrato"
+            contexto["clausulas_especiales"] = []
+            
+            respuesta = "Perfecto. Procederé a generar el contrato preliminar sin cláusulas adicionales."
+        
+        # Si el usuario desea agregar alguna
+        elif es_afirmativo(txt_norm):
+            respuesta = (
+                "Muy bien. Escribe las cláusulas o condiciones que quieras incluir.\n"
+                "Por ejemplo: 'El inquilino no podrá subarrendar el inmueble sin autorización escrita del arrendador.'"
+            )
+            contexto["estado"] = "registrando_clausulas"
+        
+        # Si el usuario directamente empieza a escribir una cláusula
+        else:
+            contexto.setdefault("clausulas_especiales", [])
+            contexto["clausulas_especiales"].append(texto_usuario)
+            respuesta = (
+                "He registrado esta cláusula. ¿Deseas agregar otra más o continuamos con el contrato?"
+            )
+
+    elif contexto.get("estado") == "registrando_clausulas":
+        txt_norm = texto_normalizado(texto_usuario)
+
+        if es_negativo(txt_norm):
+            clausulas = contexto.get("clausulas_especiales", [])
+            contexto["clausulas_validadas"] = [revisar_clausula(c) for c in clausulas]
+                        
+            contexto["estado"] = "generando_contrato"
+            respuesta = "Entendido. Procederé a generar el contrato con las cláusulas que indicaste."
+        else:
+            contexto.setdefault("clausulas_especiales", [])
+            contexto["clausulas_especiales"].append(texto_usuario)
+            respuesta = "Cláusula agregada ✅. ¿Deseas incluir otra más?"
+            
+    elif contexto.get("estado") == "esperando_aprobacion_formal":
+        txt_norm = texto_normalizado(texto_usuario)
+        
+        if es_afirmativo(txt_norm):
+            try:
+                # --- ¡AQUÍ OCURRE LA MAGIA! ---
+                codigo_contrato = formalizar_contrato(chat_id)
+                # ------------------------------
+                
+                contexto["estado"] = "formalizado"
+                contexto["codigo_contrato"] = codigo_contrato
+                respuesta = (
+                    f"¡Perfecto! ✅ Se ha formalizado tu contrato.\n\n"
+                    f"**Código de Contrato:** {codigo_contrato}\n\n"
+                    "El siguiente paso es enviar el documento a los firmantes. "
+                    "¿Deseas que prepare el envío a la plataforma de firma (Keynua)?"
+                )
+                # (Aquí puedes poner el estado "listo_para_envio" o similar)
+
+            except Exception as e:
+                print(f"Error en formalización: {e}")
+                respuesta = (
+                    "Lo siento, ocurrió un error al intentar formalizar el contrato en la base de datos. "
+                    "Por favor, intenta de nuevo o contacta a soporte."
+                )
+                # El estado permanece en "esperando_aprobacion_formal"
+                
+        elif es_negativo(txt_norm):
+            contexto["estado"] = "revision"
+            respuesta = "Entendido. Volvamos a la revisión. ¿Deseas que te muestre el resumen de nuevo para corregir algo?"
+        
+        else:
+            respuesta = "No te he entendido. Por favor, responde 'sí' para aprobar y formalizar el contrato, o 'no' para volver a revisarlo."
+
+    # --- ESTADO DE GENERACIÓN (Disparador del Preliminar) ---
+    elif contexto.get("estado") == "generando_contrato":
+        # Este estado es la SEÑAL para que el frontend llame a GET /documento
+        # El 'generation_service' cambiará el estado a 'esperando_aprobacion_formal'
+        respuesta = (
+            "Perfecto. Estoy generando el documento preliminar. "
+            "Un momento por favor..."
+        )
+    
+    # --- ESTADO FINAL ---
+    elif contexto.get("estado") == "formalizado":
+        respuesta = f"Este chat ya generó el contrato {contexto.get('codigo_contrato')}. ¿Deseas crear un nuevo contrato?"
+        contexto = {} # Reiniciar contexto
+
+    elif contexto.get("estado") == "preguntando_modificacion":
+        tipo = contexto["tipo_contrato"]
+        i = contexto.get("pregunta_actual", 0)
+        respuestas = contexto.get("respuestas", {})
+        respuestas[f"pregunta_{i+1}"] = texto_usuario
+        contexto["respuestas"] = respuestas
+
+        # Volver al estado de revisión
+        contexto["estado"] = "revision"
+        respuesta = f"He actualizado la respuesta a la pregunta {i + 1}. ¿Deseas que te muestre el resumen actualizado antes de generar el contrato?"
+    
+    else:
+        respuesta = "No entendí tu solicitud. ¿Deseas crear un nuevo contrato?"        
+
+    # Guardar mensaje del usuario
+    msg_usuario = Mensaje(chat_id=chat_id, contenido=texto_usuario, remitente="usuario", usuario_id=usuario_id, fecha_creacion=datetime.now())
+    db.session.add(msg_usuario)
+
+    # Guardar respuesta del sistema
+    msg_sistema = Mensaje(chat_id=chat_id, contenido=respuesta, remitente="sistema", fecha_creacion=datetime.now())
+    db.session.add(msg_sistema)
+
+    # Actualizar metadatos del chat
+    chat.metadatos = contexto
+    db.session.commit()
+
+    return respuesta
+
+def procesar_datos_contrato(tipo_contrato: str, respuestas_usuario: dict) -> dict:
+    """
+    Aplica los procesadores definidos en data_processors.py según el tipo de contrato.
+    Retorna un diccionario estructurado listo para Jinja2.
+    """
+    if tipo_contrato not in CONTRACTS:
+        raise ValueError(f"Tipo de contrato no reconocido: {tipo_contrato}")
+
+    contrato_config = CONTRACTS[tipo_contrato]
+    datos_procesados = {}
+
+    # Recorremos todos los campos del contrato según su configuración
+    for campo in contrato_config["campos"]:
+        nombre_campo = campo["nombre"]
+        tipo_dato = campo.get("tipo_dato")
+        valor_usuario = respuestas_usuario.get(nombre_campo, "")
+
+        procesador = PROCESSOR_REGISTRY.get(tipo_dato)
+        if procesador:
+            try:
+                resultado = procesador(valor_usuario)
+                datos_procesados[nombre_campo] = resultado
+            except Exception as e:
+                print(f"⚠️ Error procesando campo '{nombre_campo}': {e}")
+                datos_procesados[nombre_campo] = valor_usuario
+        else:
+            datos_procesados[nombre_campo] = valor_usuario
+
+    # Si existe un procesador general para este contrato (ej: arrendamiento)
+    procesador_contrato = PROCESSOR_REGISTRY.get(tipo_contrato)
+    if procesador_contrato:
+        try:
+            datos_finales = procesador_contrato(datos_procesados)
+        except Exception as e:
+            print(f"⚠️ Error aplicando procesador de contrato '{tipo_contrato}': {e}")
+            datos_finales = datos_procesados
+    else:
+        datos_finales = datos_procesados
+
+    return datos_finales
+
+
+def texto_normalizado(texto):
+    if not texto:
+        return ""
+    doc = nlp(texto.strip().lower())
+    return " ".join([token.lemma_ for token in doc])
+
+def es_afirmativo(texto):
+    txt = texto_normalizado(texto)
+    return txt in DEF_AFFIRMATIVES or txt.startswith("si ")
+
+def es_negativo(texto):
+    txt = texto_normalizado(texto)
+    return txt in DEF_NEGATIVES or txt.startswith("no ")
+
+def revisar_clausula(clausula):
+    clausula_lower = clausula.lower()
+    if "violencia" in clausula_lower or "ilegal" in clausula_lower:
+        return "⚠️ Esta cláusula parece contener términos inapropiados o no válidos legalmente."
+    elif "pena" in clausula_lower or "multa" in clausula_lower:
+        return "✔️ Cláusula de penalidad detectada. Se incluirá con redacción formal estándar."
+    else:
+        return "✔️ Cláusula revisada y considerada válida."
+
+def detectar_tipo_contrato(texto):
+    if not texto:
+        return None
+
+    doc_texto = nlp(texto.lower())
+    lemmas_texto = [token.lemma_ for token in doc_texto]
+
+    for tipo, info in CONTRACTS.items():
+        sinonimos = info.get("sinonimos", [])
+        lemmas_sinonimos = [token.lemma_ for s in sinonimos for token in nlp(s.lower())]
+
+        # 1. Comparación por lemma (forma base)
+        if any(s in lemmas_texto for s in lemmas_sinonimos):
+            return tipo
+
+        # 2. Fallback: similitud semántica
+        for token in doc_texto:
+            for sinonimo in sinonimos:
+                similitud = token.similarity(nlp(sinonimo))
+                if similitud >= 0.75:
+                    return tipo
+
+    return None

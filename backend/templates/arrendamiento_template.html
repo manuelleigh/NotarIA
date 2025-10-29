@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Contrato de Arrendamiento</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        margin: 2em;
+        max-width: 800px;
+      }
+      p {
+        margin-bottom: 1.2em;
+        text-align: justify;
+      }
+      strong {
+        font-weight: bold;
+      }
+      .titulo {
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.2em;
+      }
+      .firma {
+        margin-top: 3em;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <p class="titulo">CONTRATO DE ARRENDAMIENTO</p>
+
+    <p>
+      CONSTE POR EL PRESENTE DOCUMENTO, EL CONTRATO DE ARRENDAMIENTO QUE
+      CELEBRAN DE UNA PARTE <strong>{{ arrendador.nombre }}</strong>,
+      IDENTIFICADO/A CON D.N.I. N° <strong>{{ arrendador.dni }}</strong>, CON
+      DOMICILIO EN <strong>{{ arrendador.domicilio }}</strong>, A QUIEN EN
+      ADELANTE SE LE DENOMINARÁ <strong>{{ arrendador.tratamiento }}</strong>, Y
+      DE OTRA PARTE <strong>{{ arrendatario.nombre }}</strong>, IDENTIFICADO/A
+      CON DNI N° <strong>{{ arrendatario.dni }}</strong> CON DOMICILIO EN
+      <strong>{{ arrendatario.domicilio }}</strong>, A QUIEN EN ADELANTE SE LE
+      DENOMINARÁ <strong>{{ arrendatario.tratamiento }}</strong>; EN LOS
+      TÉRMINOS Y CONDICIONES SIGUIENTES:
+    </p>
+
+    <p>
+      <strong>PRIMERA.-</strong>
+      <strong>{{ arrendador.tratamiento }}</strong> DECLARA SER PROPIETARIO DEL
+      INMUEBLE SITO EN LA <strong>{{ inmueble.direccion }}</strong> DISTRITO DE
+      <strong>{{ inmueble.distrito }}</strong>, PROVINCIA DE
+      <strong>{{ inmueble.provincia }}</strong>, DEL DEPARTAMENTO
+      <strong>{{ inmueble.departamento }}</strong>.
+    </p>
+
+    <p>
+      <strong>SEGUNDA.-</strong>
+      <strong>{{ arrendador.tratamiento }}</strong> DA EN ARRENDAMIENTO A
+      <strong>{{ arrendatario.tratamiento }}</strong> EL LOCAL REFERIDO EN LA
+      CLAUSULA QUE ANTECEDE, POR EL PLAZO DE
+      <strong>{{ plazo.anios_letras }} ({{ plazo.anios_numeros }})</strong> AÑOS
+      CONTADOS A PARTIR DEL <strong>{{ plazo.fecha_inicio }}</strong> HASTA EL
+      <strong>{{ plazo.fecha_fin }}</strong>, FECHA EN LA CUAL PROCEDERÁ A
+      DEVOLVERLO EN EL MISMO ESTADO EN QUE LO RECIBIÓ O RENOVARLO SI HAY MUTUO
+      ACUERDO.
+    </p>
+
+    <p>
+      NO OBSTANTE LO PREVISTO EN EL PÁRRAFO ANTERIOR, QUEDA EXPRESAMENTE
+      ESTABLECIDO QUE <strong>{{ arrendatario.tratamiento }}</strong> PODRÁ
+      PONER FIN AL ARRENDAMIENTO EN CUALQUIER MOMENTO CURSANDO PARA TAL EFECTO
+      AVISO PREVIO Y POR ESCRITO A
+      <strong>{{ arrendador.tratamiento }}</strong> CON
+      <strong>Treinta (30)</strong>
+      DÍAS CALENDARIOS DE ANTICIPACIÓN, SU INCUMPLIMIENTO OBLIGA A ASUMIR EL
+      ARRENDAMIENTO DE MESES RESTANTES.
+    </p>
+
+    <p>
+      <strong>PRIMERA.-</strong>
+      <strong>{{ arrendador.tratamiento }}</strong> DECLARA SER PROPIETARIO DEL
+      INMUEBLE SITO EN LA <strong>{{ inmueble.direccion }}</strong> DISTRITO DE
+      <strong>{{ inmueble.distrito }}</strong>, PROVINCIA DE
+      <strong>{{ inmueble.provincia }}</strong>, DEL DEPARTAMENTO
+      <strong>{{ inmueble.departamento }}</strong>.
+    </p>
+
+    <p>
+      <strong>SEGUNDA.-</strong>
+      <strong>{{ arrendador.tratamiento }}</strong> DA EN ARRENDAMIENTO A
+      <strong>{{ arrendatario.tratamiento }}</strong> EL LOCAL REFERIDO EN LA
+      CLAUSULA QUE ANTECEDE, POR EL PLAZO DE
+      <strong>{{ plazo.anios_letras }} ({{ plazo.anios_numeros }})</strong> AÑOS
+      CONTADOS A PARTIR DEL <strong>{{ plazo.fecha_inicio }}</strong> HASTA EL
+      <strong>{{ plazo.fecha_fin }}</strong>, FECHA EN LA CUAL PROCEDERÁ A
+      DEVOLVERLO EN EL MISMO ESTADO EN QUE LO RECIBIÓ O RENOVARLO SI HAY MUTUO
+      ACUERDO.
+    </p>
+
+    <p>
+      NO OBSTANTE LO PREVISTO EN EL PÁRRAFO ANTERIOR, QUEDA EXPRESAMENTE
+      ESTABLECIDO QUE <strong>{{ arrendatario.tratamiento }}</strong> PODRÁ
+      PONER FIN AL ARRENDAMIENTO EN CUALQUIER MOMENTO CURSANDO PARA TAL EFECTO
+      AVISO PREVIO Y POR ESCRITO A
+      <strong>{{ arrendador.tratamiento }}</strong> CON
+      <strong
+        >{{ plazo.preaviso_dias_letras }} ({{ plazo.preaviso_dias_numeros
+        }})</strong
+      >
+      DÍAS CALENDARIOS DE ANTICIPACIÓN, SU INCUMPLIMIENTO OBLIGA A ASUMIR EL
+      ARRENDAMIENTO DE
+      <strong>{{ plazo.penalidad_meses_letras }}</strong> MESES.
+    </p>
+
+    <p>
+      <strong>TERCERA.-</strong> SON OBLIGACIONES DE
+      <strong>{{ arrendatario.tratamiento }}</strong>:<br />
+      1.- EL PAGO DEL SERVICIO DE LUZ ELÉCTRICA, AGUA POTABLE, ARBITRIOS
+      MUNICIPALES Y EL SERVICIO TELEFÓNICO.<br />
+      2.- EL PAGO DE LAS REPARACIONES Y COMPOSTURAS DE CAÑERÍAS, SANITARIOS,
+      ATOROS EN DESAGUES Y OTROS DETERIOROS QUE SE PUDIERAN PRODUCIR EN EL
+      INMUEBLE POR MAL USO O DESCUIDO EN LA CONDUCCIÓN DEL MISMO.<br />
+      3.- A DEVOLVER EL INMUEBLE EN LAS MISMAS CONDICIONES EN LAS QUE FUE
+      ENTREGADO, SALVO EL DESGASTE POR EL USO NORMAL DEL MISMO.
+    </p>
+
+    <p>
+      <strong>CUARTA.-</strong> LA MERCED CONDUCTIVA MENSUAL ACORDADA POR LAS
+      PARTES CONTRATANTES ES DE
+      <strong
+        >{{ renta.tramo1.monto_letras }} ({{ renta.moneda_simbolo }} {{
+        renta.tramo1.monto_numeros }})</strong
+      >
+      PARA LOS <strong>{{ renta.tramo1.periodo }}</strong>
+      {% if renta.tramo2 %} Y
+      <strong
+        >{{ renta.tramo2.monto_letras }} ({{ renta.moneda_simbolo }} {{
+        renta.tramo2.monto_numeros }})</strong
+      >
+      PARA LOS <strong>{{ renta.tramo2.periodo }}</strong>. {% endif %}
+    </p>
+
+    <p>
+      <strong>QUINTA.-</strong> EL PAGO DEL ARRENDAMIENTO SERÁ ABONADO HASTA EL
+      <strong>{{ pago.dia_limite_texto }}</strong> DÍA DEL MES POSTERIOR AL MES
+      VENCIDO, EN CASO DE INCUMPLIMIENTO DE
+      <strong>{{ pago.meses_incumplimiento_resolucion }}</strong>
+      CUOTAS SE DARÁ POR RESUELTO EL CONTRATO.
+    </p>
+
+    <p>
+      EL PAGO DEL ARRENDAMIENTO MENSUAL LO REALIZARÁ
+      <strong>{{ arrendatario.tratamiento }}</strong> EN LA
+      <strong>{{ pago.cuenta.tipo }}</strong> N°
+      <strong>{{ pago.cuenta.numero }}</strong> DEL
+      <strong>{{ pago.cuenta.banco }}</strong>, A NOMBRE DE
+      <strong>{{ arrendador.nombre }}</strong>, Y/O DONDE DECIDA
+      <strong>{{ arrendador.tratamiento }}</strong>.
+    </p>
+
+    <p>
+      <strong>SEXTA.-</strong> EL INMUEBLE, DADA EN ARRENDAMIENTO POR EL
+      PRESENTE CONTRATO, SERÁ DESTINADO POR
+      <strong>{{ arrendatario.tratamiento }}</strong> COMO
+      <strong>{{ inmueble.destino }}</strong>.
+    </p>
+
+    <p>
+      <strong>SEPTIMA.-</strong>
+      <strong>{{ arrendatario.tratamiento }}</strong> {% if
+      subarriendo.permitido %}PODRÁ SUBARRENDAR A TERCEROS EL INMUEBLE MATERIA
+      DEL PRESENTE CONTRATO, SIN AUTORIZACIÓN PREVIA DE
+      <strong>{{ arrendador.tratamiento }}</strong>.{% else %}NO PODRÁ
+      SUBARRENDAR A TERCEROS EL INMUEBLE MATERIA DEL PRESENTE CONTRATO, SIN
+      AUTORIZACIÓN EXPRESA Y POR ESCRITO DE
+      <strong>{{ arrendador.tratamiento }}</strong>.{% endif %}
+    </p>
+
+    <p>
+      <strong>OCTAVA.-</strong>
+      <strong>{{ arrendatario.tratamiento }}</strong> DECLARA QUE RECIBE EL BIEN
+      MATERIA DEL ARRENDAMIENTO EN BUENAS CONDICIONES DE USO Y CONSERVACIÓN EL
+      MISMO QUE COMPRENDE SERVICIOS SANITARIOS, INSTALACIONES ELÉCTRICAS,
+      DESAGUES, PISOS PUERTAS CON SUS RESPECTIVAS CERRADURAS Y SE OBLIGA A
+      CONSERVARLO EN BUEN ESTADO; OBLIGÁNDOSE DEVOLVERLO EN EL MISMO ESTADO SIN
+      MÁS DETERIORO QUE EL PROVENIENTE DEL USO ORDINARIO DEL BIEN.
+    </p>
+
+    <p>
+      SALVO UN CASO FORTUITO COMO INCENDIO O SINIESTRO NATURAL
+      <strong>{{ arrendador.tratamiento }}</strong> TENDRÁ QUE TENER UN SEGURO
+      POR EL BIEN INMUEBLE, Y
+      <strong>{{ arrendatario.tratamiento }}</strong> TENDRÁ QUE TENER UN SEGURO
+      POR SUS BIENES MUEBLES, YA QUE
+      <strong>{{ arrendador.tratamiento }}</strong> NO SE RESPONSABILIZA POR
+      ELLOS.
+    </p>
+
+    <p>
+      <strong>NOVENA.-</strong>
+      <strong>{{ arrendatario.tratamiento }}</strong> PODRÁ RETIRAR POR SU
+      CUENTA Y COSTO LAS MEJORAS QUE NO SEAN FIJAS QUE INTRODUZCAN EN EL AREA
+      MATERIA DE ARRENDAMIENTO DEJÁNDOLOS EN CONDICIONES SIMILARES A LAS QUE
+      TENÍAN AL MOMENTO DEL INICIO DEL ARRENDAMIENTO, SIN MÁS ALTERACIÓN O
+      DESGASTE QUE EL USUAL POR EL USO CONFORME AL CONTRATO.
+    </p>
+
+    <p>
+      <strong>DÉCIMA.-</strong> LAS PARTES SEÑALAN COMO DOMICILIO LEGAL LOS
+      INDICADOS EN LA INTRODUCCIÓN DEL PRESENTE CONTRATO Y ACUERDAN SOMETERSE
+      ANTE CUALQUIER CONTROVERSIA A LA JURISDICCIÓN DE LOS JUECES Y TRIBUNALES
+      DEL DISTRITO JUDICIAL DE
+      <strong>{{ jurisdiccion.distrito_judicial }}</strong>, RENUNCIANDO A
+      CUALQUIER OTRA JURISDICCIÓN QU LE PUDIERA CORRESPONDER A ALGUNA DE ELLAS.
+    </p>
+
+    <p>
+      <strong>DÉCIMA PRIMERA.-</strong> DE CONFORMIDAD AL ARTÍCULO 5° DE LA LEY
+      N° 30201 QUE MODIFICA EL ARTÍCULO 594° DEL CÓDIGO PROCESAL CIVIL
+      <strong>{{ arrendatario.tratamiento }}</strong> SE ALLANA DESDE YA A LA
+      DEMANDA JUDICIAL PARA DESOCUPAR EL INMUEBLE POR LAS CAUSALES DE
+      VENCIMIENTO DE CONTRATO DE ARRENDAMIENTO O POR INCUMPLIMIENTO DEL PAGO DE
+      {% if allanamiento %} LA RENTA DE
+      <strong>{{ allanamiento.plazo_incumplimiento }}</strong> (ej: "DOS MESES Y
+      15 DÍAS"), {% else %} LA RENTA DE <strong>DOS MESES Y 15 DÍAS</strong>, {%
+      endif %} , DE ACUERDO A LO ESTABLECIDO EN EL ARTÍCULO 330° Y SIGUIENTES
+      DEL CÓDIGO PROCESAL CIVIL.
+    </p>
+
+    <p>
+      <strong>DÉCIMA SEGUNDA.-</strong> ASÍ MISMO,
+      <strong>{{ arrendatario.tratamiento }}</strong> SE ALLANA A LA RESTITUCIÓN
+      DEL INMUEBLE MATERIA DEL PRESENTE CONTRATO AL VENCIMIENTO DEL PLAZO
+      ESTIPULADO O A LA RESOLUCIÓN DEL CONTRATO POR FALTA DE PAGO DE LA RENTA
+      MENSUAL.
+    </p>
+
+    <p>
+      <strong>DÉCIMA TERCERA.-</strong> AMBAS PARTES CONTRATANTES ACEPTAN SU
+      SOMETIMIENTO A LA LEY N° 30933 QUE REGULA EL PROCEDIMIENUTO ESPECIAL DE
+      DESALOJO CON INTERVENCIÓN NOTARIAL POR LAS CAUSALES SEÑALADAS EN LA
+      CLAUSULA PRECEDENTE.
+    </p>
+
+    <p>
+      <strong>DÉCIMA CUARTA.-</strong> EN TODO LO NO PREVISTO POR LAS PARTES EN
+      EL PRESENTE CONTRATO, AMBAS SE SOMETEN A LO ESTABLECIDO POR LAS NORMAS DEL
+      CÓDIGO CIVIL Y DEMÁS DEL SISTEMA JURÍDICO QUE RSULTEN APLICABLES.
+    </p>
+
+    <p>
+      AMBAS PARTES CONTRATANTES DEBIDAMENTE ENTERADAS DEL CONTENIDO DE TODAS Y
+      CADA UNA DE LAS CLÁUSULAS QUE ANTECEDEN NOS RATIFICAMOS EN EL PRESENTE
+      CONTRATO.
+    </p>
+
+    <p>
+      <strong>{{ contrato.ciudad_firma }}, {{ contrato.fecha_firma }}.</strong>
+    </p>
+  </body>
+</html>
