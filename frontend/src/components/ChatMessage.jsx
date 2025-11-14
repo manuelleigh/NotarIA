@@ -1,14 +1,19 @@
-import { FileText, User } from 'lucide-react';
+import React from "react";
+import { FileText, User } from "lucide-react";
 
 export function ChatMessage({ message }) {
-  const isAssistant = message.role === 'assistant';
+  const isAssistant = message.role === "assistant";
 
   return (
-    <div className={`flex items-start gap-3 ${!isAssistant ? 'flex-row-reverse' : ''}`}>
+    <div
+      className={`flex items-start gap-3 ${
+        !isAssistant ? "flex-row-reverse" : ""
+      }`}
+    >
       {/* Avatar */}
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-          isAssistant ? 'bg-blue-600' : 'bg-slate-700'
+          isAssistant ? "bg-blue-600" : "bg-slate-700"
         }`}
       >
         {isAssistant ? (
@@ -19,12 +24,12 @@ export function ChatMessage({ message }) {
       </div>
 
       {/* Message content */}
-      <div className={`flex-1 ${!isAssistant ? 'flex justify-end' : ''}`}>
+      <div className={`flex-1 ${!isAssistant ? "flex justify-end" : ""}`}>
         <div
           className={`rounded-2xl p-4 max-w-[85%] ${
             isAssistant
-              ? 'bg-slate-100 rounded-tl-sm text-slate-900'
-              : 'bg-blue-600 rounded-tr-sm text-white'
+              ? "bg-slate-100 rounded-tl-sm text-slate-900"
+              : "bg-blue-600 rounded-tr-sm text-white"
           }`}
         >
           <div className="whitespace-pre-wrap break-words">
@@ -32,12 +37,12 @@ export function ChatMessage({ message }) {
           </div>
           <div
             className={`text-xs mt-2 ${
-              isAssistant ? 'text-slate-500' : 'text-blue-100'
+              isAssistant ? "text-slate-500" : "text-blue-100"
             }`}
           >
-            {message.timestamp.toLocaleTimeString('es-ES', {
-              hour: '2-digit',
-              minute: '2-digit'
+            {message.timestamp.toLocaleTimeString("es-ES", {
+              hour: "2-digit",
+              minute: "2-digit",
             })}
           </div>
         </div>

@@ -1,11 +1,12 @@
-import { Download, X, Printer, Share2 } from 'lucide-react';
-import { Button } from './ui/button';
-import { useEffect, useState } from 'react';
-import { getContractDocument } from '../services/apiService';
-import { toast } from 'sonner@2.0.3';
+import React from "react";
+import { Download, X, Printer, Share2 } from "lucide-react";
+import { Button } from "./ui/button";
+import { useEffect, useState } from "react";
+import { getContractDocument } from "../services/apiService";
+import { toast } from "sonner@2.0.3";
 
 export function ContractPreview({ chat, onClose }) {
-  const [contractHtml, setContractHtml] = useState('');
+  const [contractHtml, setContractHtml] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -20,8 +21,8 @@ export function ContractPreview({ chat, onClose }) {
         const html = await getContractDocument(chat.apiChatId);
         setContractHtml(html);
       } catch (error) {
-        console.error('Error al cargar el contrato:', error);
-        toast.error('Error al cargar el documento');
+        console.error("Error al cargar el contrato:", error);
+        toast.error("Error al cargar el documento");
       } finally {
         setIsLoading(false);
       }
@@ -32,23 +33,23 @@ export function ContractPreview({ chat, onClose }) {
 
   const handleDownload = () => {
     if (!contractHtml) return;
-    
-    const blob = new Blob([contractHtml], { type: 'text/html' });
+
+    const blob = new Blob([contractHtml], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = `contrato-${chat?.tipoContrato || 'documento'}.html`;
+    a.download = `contrato-${chat?.tipoContrato || "documento"}.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('Documento descargado');
+    toast.success("Documento descargado");
   };
 
   const handlePrint = () => {
     if (!contractHtml) return;
-    
-    const printWindow = window.open('', '_blank');
+
+    const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(contractHtml);
       printWindow.document.close();
@@ -61,14 +62,14 @@ export function ContractPreview({ chat, onClose }) {
     if (navigator.share && contractHtml) {
       try {
         await navigator.share({
-          title: `Contrato ${chat?.tipoContrato || 'Legal'}`,
-          text: 'Documento generado por Asistente Notarial IA',
+          title: `Contrato ${chat?.tipoContrato || "Legal"}`,
+          text: "Documento generado por Asistente Notarial IA",
         });
       } catch (error) {
-        console.log('Error al compartir:', error);
+        console.log("Error al compartir:", error);
       }
     } else {
-      toast.info('Función de compartir no disponible en este navegador');
+      toast.info("Función de compartir no disponible en este navegador");
     }
   };
 
@@ -80,7 +81,10 @@ export function ContractPreview({ chat, onClose }) {
           <div>
             <h3 className="text-slate-900">Vista Previa del Contrato</h3>
             <p className="text-sm text-slate-500 mt-1">
-              {chat?.tipoContrato ? `Tipo: ${chat.tipoContrato}` : 'Generado por IA'} • Requiere revisión legal
+              {chat?.tipoContrato
+                ? `Tipo: ${chat.tipoContrato}`
+                : "Generado por IA"}{" "}
+              • Requiere revisión legal
             </p>
           </div>
           <Button
@@ -95,9 +99,9 @@ export function ContractPreview({ chat, onClose }) {
 
         {/* Action buttons */}
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="flex-1 lg:flex-none"
             onClick={handleDownload}
             disabled={!contractHtml || isLoading}
@@ -105,9 +109,9 @@ export function ContractPreview({ chat, onClose }) {
             <Download className="h-4 w-4 mr-2" />
             Descargar
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="flex-1 lg:flex-none"
             onClick={handlePrint}
             disabled={!contractHtml || isLoading}
@@ -115,9 +119,9 @@ export function ContractPreview({ chat, onClose }) {
             <Printer className="h-4 w-4 mr-2" />
             Imprimir
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="flex-1 lg:flex-none"
             onClick={handleShare}
             disabled={!contractHtml || isLoading}
@@ -143,7 +147,7 @@ export function ContractPreview({ chat, onClose }) {
               {/* Document preview */}
               <div className="bg-white border border-slate-200 shadow-lg rounded-lg p-8 lg:p-12 max-w-4xl mx-auto">
                 {/* Renderizar HTML del contrato */}
-                <div 
+                <div
                   className="contract-content text-slate-800"
                   dangerouslySetInnerHTML={{ __html: contractHtml }}
                 />
@@ -152,8 +156,10 @@ export function ContractPreview({ chat, onClose }) {
               {/* Disclaimer */}
               <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg max-w-4xl mx-auto">
                 <p className="text-sm text-amber-800">
-                  <strong>Aviso Legal:</strong> Este documento ha sido generado mediante inteligencia artificial 
-                  y debe ser revisado por un profesional legal antes de su uso. No constituye asesoría legal.
+                  <strong>Aviso Legal:</strong> Este documento ha sido generado
+                  mediante inteligencia artificial y debe ser revisado por un
+                  profesional legal antes de su uso. No constituye asesoría
+                  legal.
                 </p>
               </div>
             </>

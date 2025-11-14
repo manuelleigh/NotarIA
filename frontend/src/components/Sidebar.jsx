@@ -1,8 +1,16 @@
-import { FileText, Plus, Menu, X, LogOut } from 'lucide-react';
-import { Button } from './ui/button';
-import { useAuth } from '../contexts/AuthContext';
+import React from "react";
+import { FileText, Plus, Menu, X, LogOut } from "lucide-react";
+import { Button } from "./ui/button";
+import { useAuth } from "../contexts/AuthContext";
 
-export function Sidebar({ chats, activeChat, onSelectChat, onNewChat, isOpen, onToggle }) {
+export function Sidebar({
+  chats,
+  activeChat,
+  onSelectChat,
+  onNewChat,
+  isOpen,
+  onToggle,
+}) {
   const { logout } = useAuth();
 
   return (
@@ -20,7 +28,7 @@ export function Sidebar({ chats, activeChat, onSelectChat, onNewChat, isOpen, on
       {/* Sidebar */}
       <div
         className={`${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+          isOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0 fixed lg:static inset-y-0 left-0 z-40 w-80 bg-slate-900 border-r border-slate-800 flex flex-col transition-transform duration-200 ease-in-out`}
       >
         {/* Header */}
@@ -31,10 +39,12 @@ export function Sidebar({ chats, activeChat, onSelectChat, onNewChat, isOpen, on
             </div>
             <div>
               <h1 className="text-white">Asistente Notarial</h1>
-              <p className="text-slate-400 text-sm">Generación de Contratos IA</p>
+              <p className="text-slate-400 text-sm">
+                Generación de Contratos IA
+              </p>
             </div>
           </div>
-          
+
           <Button
             onClick={onNewChat}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
@@ -63,15 +73,17 @@ export function Sidebar({ chats, activeChat, onSelectChat, onNewChat, isOpen, on
                   onClick={() => onSelectChat(chat.id)}
                   className={`w-full text-left p-3 rounded-lg transition-colors ${
                     activeChat === chat.id
-                      ? 'bg-slate-800 text-white'
-                      : 'text-slate-300 hover:bg-slate-800/50'
+                      ? "bg-slate-800 text-white"
+                      : "text-slate-300 hover:bg-slate-800/50"
                   }`}
                 >
                   <div className="flex items-start gap-2">
-                    <FileText 
+                    <FileText
                       className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
-                        chat.contractGenerated ? 'text-green-500' : 'text-slate-400'
-                      }`} 
+                        chat.contractGenerated
+                          ? "text-green-500"
+                          : "text-slate-400"
+                      }`}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm">{chat.title}</p>
@@ -81,8 +93,10 @@ export function Sidebar({ chats, activeChat, onSelectChat, onNewChat, isOpen, on
                         </p>
                       )}
                       <p className="text-xs text-slate-600 mt-1">
-                        {chat.messageCount ? `${chat.messageCount} mensajes` : 'Sin mensajes'}
-                        {chat.contractGenerated && ' • Contrato generado'}
+                        {chat.messageCount
+                          ? `${chat.messageCount} mensajes`
+                          : "Sin mensajes"}
+                        {chat.contractGenerated && " • Contrato generado"}
                       </p>
                     </div>
                   </div>

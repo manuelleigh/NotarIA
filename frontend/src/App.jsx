@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { ChatInterface } from './components/ChatInterface';
-import { Sidebar } from './components/Sidebar';
-import { ContractPreview } from './components/ContractPreview';
-import { Auth } from './components/Auth';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { sendChatMessage, getChatHistory, getChatDetail } from './services/apiService';
-import { toast } from 'sonner@2.0.3';
-import { Toaster } from './components/ui/sonner';
+import React, { useState, useEffect } from "react";
+import { ChatInterface } from "./components/ChatInterface";
+import { Sidebar } from "./components/Sidebar";
+import { ContractPreview } from "./components/ContractPreview";
+import { Auth } from "./components/Auth";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import {
+  sendChatMessage,
+  getChatHistory,
+  getChatDetail,
+} from "./services/apiService";
+import { toast } from "sonner@2.0.3";
+import { Toaster } from "./components/ui/sonner";
 
 function MainApp() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -47,14 +51,13 @@ function ChatApp() {
       try {
         setIsLoadingHistory(true);
         const history = await getChatHistory(apiKey);
-        
-        const loadedChats = history.map(item => ({
+
+        const loadedChats = history.map((item) => ({
           id: `chat-${item.chat_id}`,
           title: item.nombre,
           messages: [], // Se cargarán cuando se seleccione
           contractGenerated:
             item.estado === "solo_preliminar" || item.contrato !== null,
-          contractGenerated: item.estado === 'solo_preliminar' || item.contrato !== null,
           createdAt: new Date(item.fecha_creacion),
           updatedAt: new Date(item.fecha_actualizacion),
           lastMessage: item.ultimo_mensaje,
@@ -65,7 +68,6 @@ function ChatApp() {
         }));
 
         setChats(loadedChats);
-
       } catch (error) {
         console.error("Error al cargar el historial:", error);
         toast.error("Error al cargar las conversaciones");
@@ -87,28 +89,17 @@ function ChatApp() {
     if (!chat?.apiChatId || !apiKey) {
       // Si es un chat nuevo sin apiChatId, simplemente se activa y se limpia el preview.
       return;
-    setShowContractPreview(false); // Ocultar preview al cambiar de chat
-
-    const chat = chats.find(c => c.id === chatId);
-
-    if (!chat?.apiChatId || !apiKey) {
-        // Si es un chat nuevo sin apiChatId, simplemente se activa y se limpia el preview.
-        return;
     }
 
     // Si el chat ya tiene mensajes, no es necesario recargarlos, pero sí asegurar que el preview esté oculto.
     if (chat.messages.length > 0) {
       return;
     }
-    // Si el chat ya tiene mensajes, no es necesario recargarlos, pero sí asegurar que el preview esté oculto.
-    if (chat.messages.length > 0) {
-        return;
-    }
 
     try {
       const detail = await getChatDetail(chat.apiChatId, apiKey);
-      
-      const messages = detail.mensajes.map(msg => ({
+
+      const messages = detail.mensajes.map((msg) => ({
         id: `msg-${msg.id}`,
         role: msg.remitente === "usuario" ? "user" : "assistant",
         content: msg.contenido,
@@ -117,7 +108,6 @@ function ChatApp() {
 
       const hasContract =
         detail.should_show_preview || detail.contrato !== null;
-      const hasContract = detail.should_show_preview || detail.contrato !== null;
 
       setChats((prevChats) =>
         prevChats.map((c) =>
@@ -138,21 +128,12 @@ function ChatApp() {
                     }
                   : undefined,
                 contractGenerated: hasContract, // Actualizar si hay contrato
-                contratoInfo: detail.contrato ? {
-                  id: detail.contrato.id,
-                  codigo: detail.contrato.codigo,
-                  titulo: detail.contrato.titulo,
-                  estado: detail.contrato.estado,
-                } : undefined,
-                contractGenerated: hasContract, // Actualizar si hay contrato
               }
             : c
         )
       );
 
       // No se muestra el preview automáticamente
-      // No se muestra el preview automáticamente
-
     } catch (error) {
       console.error("Error al cargar el detalle del chat:", error);
       toast.error("Error al cargar la conversación");
@@ -174,8 +155,6 @@ function ChatApp() {
       ],
       createdAt: new Date(),
     };
-      createdAt: new Date()
-    };    
     setChats([newChat, ...chats]);
     setActiveChat(newChat.id);
     setShowContractPreview(false);
@@ -193,8 +172,6 @@ function ChatApp() {
 
     setChats((prevChats) =>
       prevChats.map((chat) =>
-    setChats(prevChats =>
-      prevChats.map(chat =>
         chat.id === activeChat
           ? {
               ...chat,
@@ -228,13 +205,6 @@ function ChatApp() {
         "formalizado",
       ].includes(response.estado);
 
-      const contractIsReady = [
-        'esperando_aprobacion_formal',
-        'clausulas_especiales',
-        'preliminar_confirmacion',
-        'formalizado'
-      ].includes(response.estado);
-
       setChats((prevChats) =>
         prevChats.map((chat) =>
           chat.id === activeChat
@@ -245,7 +215,6 @@ function ChatApp() {
                   chat.messages.length === 1
                     ? response.tipo_contrato || content.slice(0, 30) + "..."
                     : chat.title,
-                title: chat.messages.length === 1 ? (response.tipo_contrato || content.slice(0, 30) + '...') : chat.title,
                 lastMessage: response.respuesta,
                 messageCount: (chat.messageCount || chat.messages.length) + 2,
                 apiChatId: response.chat_id,
@@ -255,20 +224,18 @@ function ChatApp() {
                 clausulasEspeciales: response.clausulas_especiales,
                 contractGenerated: contractIsReady,
                 updatedAt: new Date(),
-                contractGenerated: contractIsReady,
-                updatedAt: new Date()
               }
             : chat
         )
       );
 
       // No se muestra el preview automáticamente
-      // No se muestra el preview automáticamente
-
     } catch (error) {
-      console.error('Error al enviar mensaje:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al enviar mensaje');
-      
+      console.error("Error al enviar mensaje:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Error al enviar mensaje"
+      );
+
       const errorMessage = {
         id: `${Date.now()}-${Math.random()}`,
         role: "assistant",
