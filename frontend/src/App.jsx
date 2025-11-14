@@ -82,7 +82,7 @@ function ChatApp() {
   // Cargar detalle del chat cuando se selecciona
   const handleSelectChat = async (chatId) => {
     setActiveChat(chatId);
-    
+
     const chat = chats.find((c) => c.id === chatId);
 
     if (!chat?.apiChatId || !apiKey) {
@@ -131,9 +131,8 @@ function ChatApp() {
             : c
         )
       );
-      
-      setShowContractPreview(hasContract);
 
+      setShowContractPreview(hasContract);
     } catch (error) {
       console.error("Error al cargar el detalle del chat:", error);
       toast.error("Error al cargar la conversación");
@@ -173,7 +172,7 @@ function ChatApp() {
       content,
       timestamp: new Date(),
     };
-    
+
     // Optimistic UI update
     setChats((prevChats) =>
       prevChats.map((chat) =>
@@ -241,10 +240,12 @@ function ChatApp() {
       if (isNewChat) {
         setActiveChat(`chat-${response.chat_id}`);
       }
-
     } catch (error) {
       console.error("Error al enviar mensaje:", error);
-      const errorMessageContent = error instanceof Error ? error.message : "Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.";
+      const errorMessageContent =
+        error instanceof Error
+          ? error.message
+          : "Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.";
       toast.error(errorMessageContent);
 
       const errorMessage = {
@@ -279,7 +280,9 @@ function ChatApp() {
       <div className="flex flex-1 overflow-hidden">
         <div
           className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
-            showContractPreview && currentChat?.contractGenerated ? "lg:w-1/2" : "w-full"
+            showContractPreview && currentChat?.contractGenerated
+              ? "lg:w-1/2"
+              : "w-full"
           }`}
         >
           <ChatInterface
@@ -290,14 +293,16 @@ function ChatApp() {
           />
         </div>
 
-        {showContractPreview && currentChat?.contractGenerated && currentChat?.apiChatId && (
-          <div className="hidden lg:block lg:w-1/2 border-l border-slate-200 transition-all duration-300 ease-in-out">
-            <ContractPreview
-              chat={currentChat}
-              onClose={() => setShowContractPreview(false)}
-            />
-          </div>
-        )}
+        {showContractPreview &&
+          currentChat?.contractGenerated &&
+          currentChat?.apiChatId && (
+            <div className="hidden lg:block lg:w-1/2 border-l border-slate-200 transition-all duration-300 ease-in-out">
+              <ContractPreview
+                chat={currentChat}
+                onClose={() => setShowContractPreview(false)}
+              />
+            </div>
+          )}
       </div>
     </div>
   );
