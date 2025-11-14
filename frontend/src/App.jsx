@@ -9,7 +9,7 @@ import {
   getChatHistory,
   getChatDetail,
 } from "./services/apiService";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
 function MainApp() {
@@ -82,17 +82,16 @@ function ChatApp() {
   // Cargar detalle del chat cuando se selecciona
   const handleSelectChat = async (chatId) => {
     setActiveChat(chatId);
-    setShowContractPreview(false); // Ocultar preview al cambiar de chat
-
+    
     const chat = chats.find((c) => c.id === chatId);
 
     if (!chat?.apiChatId || !apiKey) {
-      // Si es un chat nuevo sin apiChatId, simplemente se activa y se limpia el preview.
+      setShowContractPreview(false);
       return;
     }
 
-    // Si el chat ya tiene mensajes, no es necesario recargarlos, pero sí asegurar que el preview esté oculto.
     if (chat.messages.length > 0) {
+      setShowContractPreview(chat.contractGenerated);
       return;
     }
 
@@ -127,26 +126,29 @@ function ChatApp() {
                       estado: detail.contrato.estado,
                     }
                   : undefined,
-                contractGenerated: hasContract, // Actualizar si hay contrato
+                contractGenerated: hasContract,
               }
             : c
         )
       );
+      
+      setShowContractPreview(hasContract);
 
-      // No se muestra el preview automáticamente
     } catch (error) {
       console.error("Error al cargar el detalle del chat:", error);
       toast.error("Error al cargar la conversación");
+      setShowContractPreview(false);
     }
   };
 
   const handleNewChat = () => {
+    const newChatId = `new-${Date.now()}`;
     const newChat = {
-      id: Date.now().toString(),
+      id: newChatId,
       title: "Nuevo Contrato",
       messages: [
         {
-          id: Date.now().toString(),
+          id: `msg-${Date.now()}`,
           role: "assistant",
           content:
             "Bienvenido al asistente notarial de IA. ¿Qué tipo de contrato necesita generar hoy?",
@@ -154,6 +156,8 @@ function ChatApp() {
         },
       ],
       createdAt: new Date(),
+      updatedAt: new Date(),
+      contractGenerated: false,
     };
     setChats([newChat, ...chats]);
     setActiveChat(newChat.id);
@@ -169,7 +173,8 @@ function ChatApp() {
       content,
       timestamp: new Date(),
     };
-
+    
+    // Optimistic UI update
     setChats((prevChats) =>
       prevChats.map((chat) =>
         chat.id === activeChat
@@ -177,27 +182,26 @@ function ChatApp() {
               ...chat,
               messages: [...chat.messages, userMessage],
               lastMessage: content,
-              messageCount: (chat.messageCount || chat.messages.length) + 1,
               updatedAt: new Date(),
             }
           : chat
       )
     );
 
-    // Si es un chat nuevo, genera un título para enviar al backend
-    const isNewChat = !currentChat.apiChatId;
-    const titleToSend = isNewChat ? content.slice(0, 50) : null;
+    const isNewChat = currentChat.id.startsWith("new-");
+    const titleToSend = isNewChat ? content.slice(0, 50) : undefined;
+    const chatIdToSend = isNewChat ? undefined : currentChat.apiChatId;
 
     try {
       const response = await sendChatMessage(
         content,
         apiKey,
-        currentChat.apiChatId,
-        titleToSend // Envía el nuevo título
+        chatIdToSend,
+        titleToSend
       );
 
       const aiResponse = {
-        id: `${Date.now()}-${Math.random()}`,
+        id: `msg-ai-${Date.now()}`,
         role: "assistant",
         content: response.respuesta,
         timestamp: new Date(),
@@ -207,54 +211,53 @@ function ChatApp() {
         "esperando_aprobacion_formal",
         "clausulas_especiales",
         "preliminar_confirmacion",
-        "formalizado",
       ].includes(response.estado);
+
+      if (contractIsReady) {
+        setShowContractPreview(true);
+      }
 
       setChats((prevChats) =>
         prevChats.map((chat) =>
           chat.id === activeChat
             ? {
                 ...chat,
-                messages: [...chat.messages, aiResponse],
-                // Usa siempre el título de la respuesta del backend como fuente de verdad
-                title: response.nombre || chat.title,
-                lastMessage: response.respuesta,
-                messageCount: (chat.messageCount || chat.messages.length) + 2,
+                id: `chat-${response.chat_id}`, // Update chat ID from new to real
                 apiChatId: response.chat_id,
+                title: response.nombre || chat.title,
+                messages: [...chat.messages, aiResponse],
+                lastMessage: response.respuesta,
                 estado: response.estado,
                 tipoContrato: response.tipo_contrato,
                 respuestas: response.respuestas,
                 clausulasEspeciales: response.clausulas_especiales,
-                contractGenerated: contractIsReady,
+                contractGenerated: chat.contractGenerated || contractIsReady,
                 updatedAt: new Date(),
               }
             : chat
         )
       );
 
+      if (isNewChat) {
+        setActiveChat(`chat-${response.chat_id}`);
+      }
+
     } catch (error) {
       console.error("Error al enviar mensaje:", error);
-      toast.error(
-        error instanceof Error ? error.message : "Error al enviar mensaje"
-      );
+      const errorMessageContent = error instanceof Error ? error.message : "Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.";
+      toast.error(errorMessageContent);
 
       const errorMessage = {
-        id: `${Date.now()}-${Math.random()}`,
+        id: `msg-err-${Date.now()}`,
         role: "assistant",
-        content:
-          "Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.",
+        content: errorMessageContent,
         timestamp: new Date(),
       };
 
       setChats((prevChats) =>
         prevChats.map((chat) =>
           chat.id === activeChat
-            ? {
-                ...chat,
-                messages: [...chat.messages, errorMessage],
-                lastMessage: errorMessage.content,
-                messageCount: (chat.messageCount || chat.messages.length) + 2,
-              }
+            ? { ...chat, messages: [...chat.messages, errorMessage] }
             : chat
         )
       );
@@ -270,24 +273,25 @@ function ChatApp() {
         onNewChat={handleNewChat}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
+        isLoading={isLoadingHistory}
       />
 
       <div className="flex flex-1 overflow-hidden">
         <div
-          className={`flex-1 flex flex-col ${
-            showContractPreview ? "lg:w-1/2" : "w-full"
+          className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
+            showContractPreview && currentChat?.contractGenerated ? "lg:w-1/2" : "w-full"
           }`}
         >
           <ChatInterface
             chat={currentChat}
             onSendMessage={handleSendMessage}
             onTogglePreview={() => setShowContractPreview(!showContractPreview)}
-            showPreview={showContractPreview}
+            showPreview={showContractPreview && currentChat?.contractGenerated}
           />
         </div>
 
-        {showContractPreview && currentChat?.apiChatId && (
-          <div className="hidden lg:block lg:w-1/2 border-l border-slate-200">
+        {showContractPreview && currentChat?.contractGenerated && currentChat?.apiChatId && (
+          <div className="hidden lg:block lg:w-1/2 border-l border-slate-200 transition-all duration-300 ease-in-out">
             <ContractPreview
               chat={currentChat}
               onClose={() => setShowContractPreview(false)}
