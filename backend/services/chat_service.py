@@ -116,7 +116,7 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
         txt_norm = texto_normalizado(texto_usuario)
 
         if es_negativo(txt_norm):
-            contexto["estado"] = "generando_contrato"
+            contexto["estado"] = "esperando_aprobacion_formal"
             contexto["clausulas_especiales"] = []
             respuesta = "Perfecto. Procederé a generar el contrato preliminar sin cláusulas adicionales."
         elif es_afirmativo(txt_norm):
