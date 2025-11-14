@@ -18,18 +18,15 @@ def create_app():
     # Inicializar extensiones
     db.init_app(app)
     migrate = Migrate(app, db)
-    CORS(app, 
-     resources={
-        r"/chat/*": {
-            "origins": ["http://localhost:3000"],
-            "methods": ["GET", "POST", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
-        }
-     },
-     supports_credentials=True
-)
+    CORS(
+        app,
+        resources={r"/*": {"origins": ["http://localhost:3000"]}},
+        supports_credentials=True
+    )
+
+
     
-    app.secret_key = "LEGACY_SECRET_KEY"  # Clave secreta para sesiones
+    app.secret_key = "LEGACY_SECRET_KEY"
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
     app.config['SESSION_TYPE'] = 'filesystem'
     
