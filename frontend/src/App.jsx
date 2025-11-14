@@ -207,11 +207,9 @@ function ChatApp() {
         timestamp: new Date(),
       };
 
-      const contractIsReady = [
-        "esperando_aprobacion_formal",
-        "clausulas_especiales",
-        "preliminar_confirmacion",
-      ].includes(response.estado);
+      const contractIsReady = ["esperando_aprobacion_formal"].includes(
+        response.estado
+      );
 
       if (contractIsReady) {
         setShowContractPreview(true);
