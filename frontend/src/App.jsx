@@ -143,7 +143,7 @@ function ChatApp() {
   const handleNewChat = () => {
     const newChat = {
       id: Date.now().toString(),
-      title: "Nueva Conversación",
+      title: "Nuevo Contrato",
       messages: [
         {
           id: Date.now().toString(),
@@ -212,7 +212,7 @@ function ChatApp() {
                 ...chat,
                 messages: [...chat.messages, aiResponse],
                 title:
-                  chat.messages.length === 1
+                  chat.messages.length === 2
                     ? response.tipo_contrato || content.slice(0, 30) + "..."
                     : chat.title,
                 lastMessage: response.respuesta,
