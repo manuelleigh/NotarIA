@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react';
-import { ChatInterface } from './components/ChatInterface';
-import { Sidebar } from './components/Sidebar';
-import { ContractPreview } from './components/ContractPreview';
-import { Auth } from './components/Auth';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { sendChatMessage, getChatHistory, getChatDetail } from './services/apiService';
-import { toast } from 'sonner@2.0.3';
-import { Toaster } from './components/ui/sonner';
+import { useState, useEffect } from "react";
+import { ChatInterface } from "./components/ChatInterface";
+import { Sidebar } from "./components/Sidebar";
+import { ContractPreview } from "./components/ContractPreview";
+import { Auth } from "./components/Auth";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import {
+  sendChatMessage,
+  getChatHistory,
+  getChatDetail,
+} from "./services/apiService";
+import { toast } from "sonner@2.0.3";
+import { Toaster } from "./components/ui/sonner";
 
 export interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: Date;
 }
@@ -67,7 +71,7 @@ function ChatApp() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
-  const currentChat = chats.find(chat => chat.id === activeChat);
+  const currentChat = chats.find((chat) => chat.id === activeChat);
 
   // Cargar historial al iniciar
   useEffect(() => {
@@ -77,14 +81,13 @@ function ChatApp() {
       try {
         setIsLoadingHistory(true);
         const history = await getChatHistory(apiKey);
-        
-        console.log('📋 Historial recibido del backend:', history);
-        
-        const loadedChats: Chat[] = history.map(item => ({
+
+        const loadedChats: Chat[] = history.map((item) => ({
           id: `chat-${item.chat_id}`,
           title: item.nombre,
           messages: [], // Se cargarán cuando se seleccione
-          contractGenerated: item.contrato !== null,
+          contractGenerated:
+            item.estado === "solo_preliminar" || item.contrato !== null,
           createdAt: new Date(item.fecha_creacion),
           updatedAt: new Date(item.fecha_actualizacion),
           lastMessage: item.ultimo_mensaje,
@@ -94,19 +97,10 @@ function ChatApp() {
           contratoInfo: item.contrato || undefined,
         }));
 
-        console.log('✅ Chats procesados:', loadedChats.map(c => ({
-          id: c.id,
-          title: c.title,
-          contractGenerated: c.contractGenerated,
-          contratoInfo: c.contratoInfo
-        })));
-
         setChats(loadedChats);
-
-        // Si no hay chats, no hacer nada (el usuario puede crear uno manualmente)
       } catch (error) {
-        console.error('Error al cargar el historial:', error);
-        toast.error('Error al cargar las conversaciones');
+        console.error("Error al cargar el historial:", error);
+        toast.error("Error al cargar las conversaciones");
       } finally {
         setIsLoadingHistory(false);
       }
@@ -118,32 +112,35 @@ function ChatApp() {
   // Cargar detalle del chat cuando se selecciona
   const handleSelectChat = async (chatId: string) => {
     setActiveChat(chatId);
-    const chat = chats.find(c => c.id === chatId);
-    
-    // Si el chat ya tiene mensajes cargados, no volver a cargar
-    if (chat && chat.messages.length > 0) {
-      // Mostrar preview si tiene contrato (no forzar si el usuario lo cerró)
-      // El usuario puede usar el botón "Ver Contrato" si lo necesita
+    setShowContractPreview(false); // Ocultar preview al cambiar de chat
+
+    const chat = chats.find((c) => c.id === chatId);
+
+    if (!chat?.apiChatId || !apiKey) {
+      // Si es un chat nuevo sin apiChatId, simplemente se activa y se limpia el preview.
       return;
     }
 
-    if (!chat?.apiChatId || !apiKey) return;
+    // Si el chat ya tiene mensajes, no es necesario recargarlos, pero sí asegurar que el preview esté oculto.
+    if (chat.messages.length > 0) {
+      return;
+    }
 
     try {
       const detail = await getChatDetail(chat.apiChatId, apiKey);
-      
-      // Convertir mensajes de la API al formato local
-      const messages: Message[] = detail.mensajes.map(msg => ({
+
+      const messages: Message[] = detail.mensajes.map((msg) => ({
         id: `msg-${msg.id}`,
-        role: msg.remitente === 'usuario' ? 'user' : 'assistant',
+        role: msg.remitente === "usuario" ? "user" : "assistant",
         content: msg.contenido,
         timestamp: new Date(msg.fecha),
       }));
 
-      const hasContract = detail.contrato !== null;
+      const hasContract =
+        detail.should_show_preview || detail.contrato !== null;
 
-      setChats(prevChats =>
-        prevChats.map(c =>
+      setChats((prevChats) =>
+        prevChats.map((c) =>
           c.id === chatId
             ? {
                 ...c,
@@ -152,41 +149,41 @@ function ChatApp() {
                 tipoContrato: detail.chat.metadatos?.tipo_contrato,
                 estado: detail.chat.metadatos?.estado,
                 respuestas: detail.chat.metadatos?.respuestas,
-                contratoInfo: detail.contrato ? {
-                  id: detail.contrato.id,
-                  codigo: detail.contrato.codigo,
-                  titulo: detail.contrato.titulo,
-                  estado: detail.contrato.estado,
-                } : undefined,
-                contractGenerated: hasContract,
+                contratoInfo: detail.contrato
+                  ? {
+                      id: detail.contrato.id,
+                      codigo: detail.contrato.codigo,
+                      titulo: detail.contrato.titulo,
+                      estado: detail.contrato.estado,
+                    }
+                  : undefined,
+                contractGenerated: hasContract, // Actualizar si hay contrato
               }
             : c
         )
       );
 
-      // Mostrar preview automáticamente solo la primera vez que se carga
-      if (hasContract) {
-        setShowContractPreview(true);
-      }
+      // No se muestra el preview automáticamente
     } catch (error) {
-      console.error('Error al cargar el detalle del chat:', error);
-      toast.error('Error al cargar la conversación');
+      console.error("Error al cargar el detalle del chat:", error);
+      toast.error("Error al cargar la conversación");
     }
   };
 
   const handleNewChat = () => {
     const newChat: Chat = {
       id: Date.now().toString(),
-      title: 'Nueva Conversación',
+      title: "Nueva Conversación",
       messages: [
         {
           id: Date.now().toString(),
-          role: 'assistant',
-          content: 'Bienvenido al asistente notarial de IA. ¿Qué tipo de contrato necesita generar hoy?',
-          timestamp: new Date()
-        }
+          role: "assistant",
+          content:
+            "Bienvenido al asistente notarial de IA. ¿Qué tipo de contrato necesita generar hoy?",
+          timestamp: new Date(),
+        },
       ],
-      createdAt: new Date()
+      createdAt: new Date(),
     };
     setChats([newChat, ...chats]);
     setActiveChat(newChat.id);
@@ -198,28 +195,26 @@ function ChatApp() {
 
     const userMessage: Message = {
       id: `${Date.now()}-${Math.random()}`,
-      role: 'user',
+      role: "user",
       content,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
-    // Add user message immediately
-    setChats(prevChats =>
-      prevChats.map(chat =>
+    setChats((prevChats) =>
+      prevChats.map((chat) =>
         chat.id === activeChat
-          ? { 
-              ...chat, 
+          ? {
+              ...chat,
               messages: [...chat.messages, userMessage],
               lastMessage: content,
               messageCount: (chat.messageCount || chat.messages.length) + 1,
-              updatedAt: new Date()
+              updatedAt: new Date(),
             }
           : chat
       )
     );
 
     try {
-      // Llamar a la API real
       const response = await sendChatMessage(
         content,
         apiKey,
@@ -228,20 +223,28 @@ function ChatApp() {
 
       const aiResponse: Message = {
         id: `${Date.now()}-${Math.random()}`,
-        role: 'assistant',
+        role: "assistant",
         content: response.respuesta,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
 
-      setChats(prevChats =>
-        prevChats.map(chat =>
+      const contractIsReady = [
+        "esperando_aprobacion_formal",
+        "clausulas_especiales",
+        "preliminar_confirmacion",
+        "formalizado",
+      ].includes(response.estado);
+
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
           chat.id === activeChat
             ? {
                 ...chat,
                 messages: [...chat.messages, aiResponse],
-                title: chat.messages.length === 1 
-                  ? (response.tipo_contrato || content.slice(0, 30) + '...') 
-                  : chat.title,
+                title:
+                  chat.messages.length === 1
+                    ? response.tipo_contrato || content.slice(0, 30) + "..."
+                    : chat.title,
                 lastMessage: response.respuesta,
                 messageCount: (chat.messageCount || chat.messages.length) + 2,
                 apiChatId: response.chat_id,
@@ -249,41 +252,36 @@ function ChatApp() {
                 tipoContrato: response.tipo_contrato,
                 respuestas: response.respuestas,
                 clausulasEspeciales: response.clausulas_especiales,
-                contractGenerated: response.estado === 'generando_contrato' || 
-                                   response.estado === 'esperando_aprobacion_formal' ||
-                                   response.estado === 'formalizado',
-                updatedAt: new Date()
+                contractGenerated: contractIsReady,
+                updatedAt: new Date(),
               }
             : chat
         )
       );
 
-      // Mostrar preview si el contrato está listo
-      if (response.estado === 'generando_contrato' || 
-          response.estado === 'esperando_aprobacion_formal' ||
-          response.estado === 'formalizado') {
-        setShowContractPreview(true);
-      }
+      // No se muestra el preview automáticamente
     } catch (error) {
-      console.error('Error al enviar mensaje:', error);
-      toast.error(error instanceof Error ? error.message : 'Error al enviar mensaje');
-      
-      // Agregar mensaje de error
+      console.error("Error al enviar mensaje:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Error al enviar mensaje"
+      );
+
       const errorMessage: Message = {
         id: `${Date.now()}-${Math.random()}`,
-        role: 'assistant',
-        content: 'Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.',
-        timestamp: new Date()
+        role: "assistant",
+        content:
+          "Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta de nuevo.",
+        timestamp: new Date(),
       };
 
-      setChats(prevChats =>
-        prevChats.map(chat =>
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
           chat.id === activeChat
-            ? { 
-                ...chat, 
+            ? {
+                ...chat,
                 messages: [...chat.messages, errorMessage],
                 lastMessage: errorMessage.content,
-                messageCount: (chat.messageCount || chat.messages.length) + 2
+                messageCount: (chat.messageCount || chat.messages.length) + 2,
               }
             : chat
         )
@@ -295,15 +293,19 @@ function ChatApp() {
     <div className="flex h-screen bg-slate-50">
       <Sidebar
         chats={chats}
-        activeChat={activeChat || ''}
+        activeChat={activeChat || ""}
         onSelectChat={handleSelectChat}
         onNewChat={handleNewChat}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
-      
+
       <div className="flex flex-1 overflow-hidden">
-        <div className={`flex-1 flex flex-col ${showContractPreview ? 'lg:w-1/2' : 'w-full'}`}>
+        <div
+          className={`flex-1 flex flex-col ${
+            showContractPreview ? "lg:w-1/2" : "w-full"
+          }`}
+        >
           <ChatInterface
             chat={currentChat}
             onSendMessage={handleSendMessage}
