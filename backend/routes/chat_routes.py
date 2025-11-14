@@ -174,6 +174,13 @@ def obtener_chat(chat_id):
         .first()
     )
 
+    # Determinar si se debe mostrar el preview
+    should_show_preview = False
+    if chat.metadatos:
+        estado_meta = chat.metadatos.get("estado")
+        if estado_meta in ["esperando_aprobacion_formal", "clausulas_especiales", "preliminar_confirmacion"]:
+            should_show_preview = True
+
     return jsonify({
         "chat": {
             "id": chat.id,
@@ -199,7 +206,8 @@ def obtener_chat(chat_id):
             "estado": contrato.estado,
             "contenido": contrato.contenido,  # datos preliminares
             "archivo_original_url": contrato.archivo_original_url
-        } if contrato else None
+        } if contrato else None,
+        "should_show_preview": should_show_preview
     }), 200
 
 
