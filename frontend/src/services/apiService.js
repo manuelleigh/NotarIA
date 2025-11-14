@@ -40,10 +40,13 @@ export async function getChatDetail(chatId, apiKey) {
   return response.json();
 }
 
-export async function sendChatMessage(mensaje, apiKey, chatId) {
+export async function sendChatMessage(mensaje, apiKey, chatId, nombre) {
   const body = { mensaje };
   if (chatId) {
     body.chat_id = chatId;
+  }
+  if (nombre) {
+    body.nombre = nombre;
   }
 
   const response = await fetch(`${API_BASE_URL}/chat`, {

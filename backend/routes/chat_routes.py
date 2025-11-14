@@ -38,11 +38,14 @@ def manejar_chat():
 
     mensaje = data["mensaje"].strip()
     chat_id = data.get("chat_id")
+    nombre = data.get("nombre") # Capturar el nuevo nombre del chat
 
-    # 1️. Si no hay chat_id, crear un nuevo chat
+    # 1. Si no hay chat_id, crear un nuevo chat
     if not chat_id:
+        # Usar el nombre proporcionado o un valor por defecto
+        nuevo_nombre = nombre or "Nuevo Contrato Legal"
         nuevo_chat = Chat(
-            nombre="Nuevo chat legal",
+            nombre=nuevo_nombre,
             usuario_id=request.usuario.id,
             fecha_creacion=db.func.now(),
             metadatos={}
@@ -50,18 +53,27 @@ def manejar_chat():
         db.session.add(nuevo_chat)
         db.session.commit()
         chat_id = nuevo_chat.id
+    # Si se proporciona un nombre para un chat existente, actualizarlo
+    elif nombre:
+        chat_a_actualizar = Chat.query.get(chat_id)
+        if chat_a_actualizar and chat_a_actualizar.usuario_id == request.usuario.id:
+            chat_a_actualizar.nombre = nombre
+            # La confirmación se hará después del procesamiento del mensaje
 
     try:
-        # 2️. Procesar el mensaje con la lógica del servicio
-        respuesta = procesar_mensaje(chat_id, mensaje, request.usuario.id)
+        # 2. Procesar el mensaje con la lógica del servicio
+        respuesta_servicio = procesar_mensaje(chat_id, mensaje, request.usuario.id)
 
-        # 3️. Recuperar estado actualizado del chat
-        chat = Chat.query.get(chat_id)
-        contexto = chat.metadatos or {}
+        # 3. Guardar cambios y devolver una respuesta completa
+        db.session.commit()
+        chat_actualizado = Chat.query.get(chat_id)
+        contexto = chat_actualizado.metadatos or {}
 
+        # La respuesta ahora incluye el nombre actualizado del chat
         return jsonify({
             "chat_id": chat_id,
-            "respuesta": respuesta,
+            "nombre": chat_actualizado.nombre, # Devolver el nombre final
+            "respuesta": respuesta_servicio,
             "estado": contexto.get("estado"),
             "tipo_contrato": contexto.get("tipo_contrato"),
             "pregunta_actual": contexto.get("pregunta_actual"),

@@ -184,11 +184,16 @@ function ChatApp() {
       )
     );
 
+    // Si es un chat nuevo, genera un título para enviar al backend
+    const isNewChat = !currentChat.apiChatId;
+    const titleToSend = isNewChat ? content.slice(0, 50) : null;
+
     try {
       const response = await sendChatMessage(
         content,
         apiKey,
-        currentChat.apiChatId
+        currentChat.apiChatId,
+        titleToSend // Envía el nuevo título
       );
 
       const aiResponse = {
@@ -211,10 +216,8 @@ function ChatApp() {
             ? {
                 ...chat,
                 messages: [...chat.messages, aiResponse],
-                title:
-                  chat.messages.length === 2
-                    ? response.tipo_contrato || content.slice(0, 30) + "..."
-                    : chat.title,
+                // Usa siempre el título de la respuesta del backend como fuente de verdad
+                title: response.nombre || chat.title,
                 lastMessage: response.respuesta,
                 messageCount: (chat.messageCount || chat.messages.length) + 2,
                 apiChatId: response.chat_id,
@@ -229,7 +232,6 @@ function ChatApp() {
         )
       );
 
-      // No se muestra el preview automáticamente
     } catch (error) {
       console.error("Error al enviar mensaje:", error);
       toast.error(
