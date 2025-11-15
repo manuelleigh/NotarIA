@@ -1,54 +1,32 @@
 const API_BASE_URL = "http://127.0.0.1:5000";
 
+async function handleResponse(response) {
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("Token requerido");
+    if (response.status === 403) throw new Error("Usuario no autorizado");
+    if (response.status === 404) throw new Error("Recurso no encontrado");
+    throw new Error("Error en la solicitud a la API");
+  }
+  return response.json();
+}
+
 export async function getChatHistory(apiKey) {
   const response = await fetch(`${API_BASE_URL}/chat/historial`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { Authorization: `Bearer ${apiKey}` },
   });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Token requerido");
-    }
-    throw new Error("Error al obtener el historial");
-  }
-
-  const result = await response.json();
-  return result.data; // Devolver solo el array de chats
+  const data = await handleResponse(response);
+  return data.data;
 }
 
 export async function getChatDetail(chatId, apiKey) {
   const response = await fetch(`${API_BASE_URL}/chat/${chatId}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers: { Authorization: `Bearer ${apiKey}` },
   });
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Token requerido");
-    }
-    if (response.status === 404) {
-      throw new Error("Chat no encontrado");
-    }
-    throw new Error("Error al obtener el chat");
-  }
-
-  return response.json();
+  return handleResponse(response);
 }
 
 export async function sendChatMessage(mensaje, apiKey, chatId, nombre) {
-  const body = { mensaje };
-  if (chatId) {
-    body.chat_id = chatId;
-  }
-  if (nombre) {
-    body.nombre = nombre;
-  }
-
+  const body = { mensaje, chat_id: chatId, nombre };
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: "POST",
     headers: {
@@ -57,37 +35,45 @@ export async function sendChatMessage(mensaje, apiKey, chatId, nombre) {
     },
     body: JSON.stringify(body),
   });
+  return handleResponse(response);
+}
 
-  if (!response.ok) {
-    if (response.status === 401) {
-      throw new Error("Token requerido");
+export async function sendChatMessageStreaming(contexto, message, onChunk) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/chat/streaming`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contexto, message }),
+    });
+
+    if (!response.body) return;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      
+      // No procesar el buffer, simplemente pasar el chunk
+      onChunk(buffer);
+      buffer = ""; // Limpiar el buffer después de cada chunk
     }
-    if (response.status === 403) {
-      throw new Error("Usuario no autorizado");
-    }
-    if (response.status === 404) {
-      throw new Error("Chat no encontrado");
-    }
-    throw new Error("Error al enviar mensaje");
+
+  } catch (error) {
+    console.error("Error en la comunicación streaming:", error);
+    throw error;
   }
-
-  return response.json();
 }
 
 export async function getContractDocument(chatId) {
-  const response = await fetch(
-    `${API_BASE_URL}/chat/documento?chat_id=${chatId}`,
-    {
-      method: "GET",
-    }
-  );
-
+  const response = await fetch(`${API_BASE_URL}/chat/documento?chat_id=${chatId}`);
   if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error("Chat no encontrado");
-    }
+    if (response.status === 404) throw new Error("Chat no encontrado");
     throw new Error("Error al obtener el documento");
   }
-
   return response.text();
 }
