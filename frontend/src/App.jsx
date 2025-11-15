@@ -51,10 +51,9 @@ function ChatApp() {
       const loadedChats = history.map((item) => ({
         id: `chat-${item.chat_id}`,
         title: item.nombre,
-        messages: [],
+        messages: [], // Los mensajes se cargarán al seleccionar el chat
         contractGenerated: item.contrato !== null,
         lastMessage: item.ultimo_mensaje,
-        messageCount: item.ultimo_mensaje ? 1 : 0,
         apiChatId: item.chat_id,
         contexto: item.metadatos || {},
       }));
@@ -73,21 +72,24 @@ function ChatApp() {
   const handleSelectChat = async (chatId) => {
     setActiveChatId(chatId);
     const chat = chats.find((c) => c.id === chatId);
-    if (!chat?.apiChatId || !apiKey || chat.messages.length > 0) {
+    if (!chat?.apiChatId || !apiKey || (chat.messages && chat.messages.length > 0)) {
       setShowContractPreview(chat?.contractGenerated || false);
       return;
     }
+
     try {
       const detail = await getChatDetail(chat.apiChatId, apiKey);
       const messages = detail.mensajes.map((msg) => ({
         id: `msg-${msg.id}`,
         role: msg.remitente === "usuario" ? "user" : "assistant",
         content: msg.contenido,
+        createdAt: new Date(msg.fecha_creacion), // <-- CORREGIDO: Asegurar que createdAt es un objeto Date
       }));
+
       setChats((prev) =>
         prev.map((c) =>
           c.id === chatId
-            ? { ...c, messages, messageCount: messages.length, contexto: detail.chat.metadatos, contractGenerated: detail.contrato !== null }
+            ? { ...c, messages, contexto: detail.chat.metadatos, contractGenerated: detail.contrato !== null }
             : c
         )
       );
@@ -102,9 +104,13 @@ function ChatApp() {
       id: `new-${Date.now()}`,
       title: "Nuevo Contrato",
       messages: [
-        { id: `msg-${Date.now()}`, role: "assistant", content: "Bienvenido. ¿Qué contrato necesita?" },
+        {
+          id: `msg-${Date.now()}`,
+          role: "assistant",
+          content: "Bienvenido. ¿Qué contrato necesita?",
+          createdAt: new Date(), // <-- CORREGIDO: Añadir fecha de creación
+        },
       ],
-      messageCount: 1,
       contexto: {},
     };
     setChats([newChat, ...chats]);
@@ -115,27 +121,27 @@ function ChatApp() {
   const handleSendMessage = async (content) => {
     if (!currentChat) return;
 
-    const userMessage = { id: `${Date.now()}`, role: "user", content };
+    const userMessage = {
+      id: `${Date.now()}-user`,
+      role: "user",
+      content,
+      createdAt: new Date(), // <-- CORREGIDO: Añadir fecha de creación
+    };
     const updatedMessages = [...currentChat.messages, userMessage];
     const assistantMessageId = `${Date.now()}-ai`;
 
     setChats((prev) =>
-      prev.map((chat) =>
-        chat.id === activeChatId
-          ? { ...chat, messages: updatedMessages, messageCount: updatedMessages.length }
-          : chat
-      )
+      prev.map((chat) => (chat.id === activeChatId ? { ...chat, messages: updatedMessages } : chat))
     );
 
     try {
       await sendChatMessageStreaming(currentChat.contexto, content, (chunk) => {
         setChats((prev) => {
-          const newChats = prev.map((chat) => {
+          return prev.map((chat) => {
             if (chat.id === activeChatId) {
               let newMessages = [...chat.messages];
               let newContext = chat.contexto;
 
-              // Si llega un chunk de texto, se actualiza el último mensaje
               if (chunk.text) {
                 const lastMessage = newMessages[newMessages.length - 1];
                 if (lastMessage?.id === assistantMessageId) {
@@ -144,20 +150,19 @@ function ChatApp() {
                     { ...lastMessage, content: lastMessage.content + chunk.text },
                   ];
                 } else {
-                  newMessages.push({ id: assistantMessageId, role: "assistant", content: chunk.text });
+                  // <-- CORREGIDO: Añadir fecha de creación al primer chunk del asistente
+                  newMessages.push({ id: assistantMessageId, role: "assistant", content: chunk.text, createdAt: new Date() });
                 }
               }
 
-              // Si llega una actualización de contexto, se actualiza el estado del chat
               if (chunk.context) {
                 newContext = chunk.context;
               }
 
-              return { ...chat, messages: newMessages, messageCount: newMessages.length, contexto: newContext };
+              return { ...chat, messages: newMessages, contexto: newContext };
             }
             return chat;
           });
-          return newChats;
         });
       });
 

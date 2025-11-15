@@ -4,6 +4,11 @@ import { FileText, User } from "lucide-react";
 export function ChatMessage({ message }) {
   const isAssistant = message.role === "assistant";
 
+  // A defensive check, in case message is somehow undefined.
+  if (!message) {
+    return null;
+  }
+
   return (
     <div
       className={`flex items-start gap-3 ${
@@ -35,16 +40,20 @@ export function ChatMessage({ message }) {
           <div className="whitespace-pre-wrap break-words">
             {message.content}
           </div>
-          <div
-            className={`text-xs mt-2 ${
-              isAssistant ? "text-slate-500" : "text-blue-100"
-            }`}
-          >
-            {message.timestamp.toLocaleTimeString("es-ES", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </div>
+          {/* Conditionally render the timestamp only if it exists */}
+          {message.createdAt && (
+            <div
+              className={`text-xs mt-2 ${
+                isAssistant ? "text-slate-500" : "text-blue-100"
+              }`}
+            >
+              {/* Ensure createdAt is a Date object before calling toLocaleTimeString */}
+              {new Date(message.createdAt).toLocaleTimeString("es-ES", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
