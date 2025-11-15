@@ -4,12 +4,7 @@ import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
 
-export function ChatInterface({
-  chat,
-  onSendMessage,
-  onTogglePreview,
-  showPreview,
-}) {
+export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPreview }) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef(null);
@@ -28,22 +23,52 @@ export function ChatInterface({
     }
   };
 
-  // Render a placeholder if no chat is active
   if (!chat) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center bg-slate-50">
-        <FileText className="h-16 w-16 text-slate-300" />
-        <h2 className="mt-4 text-xl font-semibold text-slate-600">
-          Bienvenido a tu Asistente Notarial
-        </h2>
-        <p className="mt-2 text-slate-500">
-          Selecciona una conversación o crea un nuevo contrato para comenzar.
-        </p>
+        <FileText className="h-16 w-16 text-slate-300"/>
+        <h2 className="mt-4 text-xl font-semibold text-slate-600">Bienvenido a tu Asistente Notarial</h2>
+        <p className="mt-2 text-slate-500">Selecciona una conversación o crea un nuevo contrato para comenzar.</p>
       </div>
     );
   }
 
-  const { title, messages, contractGenerated } = chat;
+  const { title, messages, contractGenerated, contexto } = chat;
+
+  // --- Lógica mejorada para mostrar el estado y texto del contrato ---
+  const getStatusDisplay = () => {
+    if (!contractGenerated) {
+      return {
+        text: 'Asistente legal con IA',
+        className: 'text-slate-500',
+        buttonText: ''
+      };
+    }
+
+    switch (contexto?.estado) {
+      case 'esperando_aprobacion_formal':
+        return {
+          text: '📄 Contrato Preliminar Disponible',
+          className: 'text-blue-600 font-medium',
+          buttonText: 'Ver Preliminar'
+        };
+      case 'formalizado':
+        return {
+          text: '✓ Contrato Formalizado',
+          className: 'text-green-600 font-medium',
+          buttonText: 'Ver Formalizado'
+        };
+      default:
+        // Fallback en caso de que contractGenerated sea true pero el estado no coincida
+        return {
+          text: '📄 Contrato Disponible',
+          className: 'text-green-600 font-medium',
+          buttonText: 'Ver Contrato'
+        };
+    }
+  }
+
+  const statusDisplay = getStatusDisplay();
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -51,17 +76,11 @@ export function ChatInterface({
       <div className="flex items-center justify-between border-b border-slate-200 p-4 bg-white">
         <div>
           <h2 className="font-semibold text-slate-800">{title}</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {contractGenerated ? (
-              <span className="text-green-600 font-medium">
-                ✓ Contrato generado
-              </span>
-            ) : (
-              <span>Generando contrato...</span>
-            )}
+          <p className="text-sm mt-0.5">
+             <span className={statusDisplay.className}>{statusDisplay.text}</span>
           </p>
         </div>
-        {/* The button ONLY appears if a contract has been generated */}
+        
         {contractGenerated && (
           <Button
             onClick={onTogglePreview}
@@ -74,7 +93,7 @@ export function ChatInterface({
             }`}
           >
             <FileText className="h-4 w-4" />
-            {showPreview ? "Ocultar" : "Ver"} Preliminar
+            {showPreview ? "Ocultar" : statusDisplay.buttonText}
           </Button>
         )}
       </div>
@@ -98,11 +117,7 @@ export function ChatInterface({
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                isSending
-                  ? "Esperando respuesta..."
-                  : "Describa el contrato que necesita o responda..."
-              }
+              placeholder={isSending ? "Esperando respuesta..." : "Describa el contrato que necesita o responda..."}
               className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white disabled:bg-slate-100"
               disabled={isSending}
             />
