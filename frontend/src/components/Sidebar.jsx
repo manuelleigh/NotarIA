@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React from "react";
 import {
   ChevronsLeft,
   ChevronsRight,
@@ -7,43 +7,40 @@ import {
   FileText,
   Trash2,
   LogOut,
-  Settings,
-  HelpCircle,
-  Sun,
-  Moon,
-  Home,
 } from "lucide-react";
-import { AuthContext } from "../contexts/AuthContext";
+import { useAuth } from "../contexts/AuthContext";
 
 export function Sidebar({
-  isSidebarOpen,
-  toggleSidebar,
+  isOpen,
+  onToggle,
   onNewChat,
   onSelectChat,
   chats,
-  activeChatId,
-  onDeleteChat,
+  activeChat,
+  // onDeleteChat, // This prop is not being passed from App.jsx, let's remove it for now
 }) {
-  const { logout } = useContext(AuthContext);
+  const { logout } = useAuth();
 
   const handleDeleteChat = (e, chatId) => {
     e.stopPropagation();
-    if (window.confirm("¿Estás seguro de que quieres eliminar este chat?")) {
-      onDeleteChat(chatId);
+    // This should be handled by a prop from App.jsx, but it's missing.
+    // For now, we'll add a placeholder.
+    if (window.confirm("La función para eliminar chats aún no está conectada.")) {
+      // onDeleteChat(chatId);
     }
   };
 
   return (
     <div
       className={`bg-slate-800 text-white flex flex-col transition-all duration-300 ${
-        isSidebarOpen ? "w-64" : "w-20"
+        isOpen ? "w-72" : "w-20"
       }`}
     >
       {/* Header */}
       <div className="p-4 flex items-center justify-between">
-        {isSidebarOpen && <h1 className="text-xl font-bold">LegalBot</h1>}
-        <button onClick={toggleSidebar} className="p-2 hover:bg-slate-700 rounded">
-          {isSidebarOpen ? <ChevronsLeft /> : <ChevronsRight />}
+        {isOpen && <h1 className="text-xl font-bold">LegalBot</h1>}
+        <button onClick={onToggle} className="p-2 hover:bg-slate-700 rounded">
+          {isOpen ? <ChevronsLeft /> : <ChevronsRight />}
         </button>
       </div>
 
@@ -54,7 +51,7 @@ export function Sidebar({
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded flex items-center justify-center"
         >
           <Plus className="h-5 w-5" />
-          {isSidebarOpen && <span className="ml-2">Nuevo Chat</span>}
+          {isOpen && <span className="ml-2">Nuevo Chat</span>}
         </button>
       </div>
 
@@ -63,10 +60,10 @@ export function Sidebar({
         <div className="px-4">
           <h2
             className={`text-xs font-semibold text-slate-400 ${
-              isSidebarOpen ? "text-left" : "text-center"
+              isOpen ? "text-left" : "text-center"
             }`}
           >
-            {isSidebarOpen ? "Historial" : "Chats"}
+            {isOpen ? "Historial" : "Chats"}
           </h2>
         </div>
         <ul className="mt-2">
@@ -75,44 +72,42 @@ export function Sidebar({
               <div
                 onClick={() => onSelectChat(chat.id)}
                 className={`flex items-center justify-between p-2 rounded cursor-pointer ${
-                  activeChatId === chat.id
+                  activeChat === chat.id
                     ? "bg-slate-700"
                     : "hover:bg-slate-700/50"
                 }`}
               >
-                {isSidebarOpen ? (
+                {isOpen ? (
                   <>
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-2 flex-1 min-w-0">
                       <FileText
-                        className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
+                        className={`h-4 w-4 mt-1 flex-shrink-0 ${
                           chat.contractGenerated
                             ? "text-green-500"
                             : "text-slate-400"
                         }`}
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm">{chat.title}</p>
+                        <p className="truncate text-sm font-semibold text-slate-100">{chat.title}</p>
                         {chat.lastMessage && (
-                          <p className="text-xs text-slate-500 truncate mt-0.5">
+                          <p className="text-xs text-slate-400 truncate mt-1">
                             {chat.lastMessage}
                           </p>
                         )}
-                        <p className="text-xs text-slate-600 mt-1">
-                          {chat.messageCount > 0
-                            ? `${chat.messageCount} mensajes`
-                            : chat.lastMessage ? '1 mensaje' : 'Sin mensajes'}
-                        </p>
                       </div>
                     </div>
                     <button
                       onClick={(e) => handleDeleteChat(e, chat.id)}
-                      className="ml-2 p-1 text-slate-400 hover:text-white hover:bg-slate-600 rounded"
+                      className="ml-2 p-1 text-slate-500 hover:text-white hover:bg-slate-600 rounded opacity-50 hover:opacity-100"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </>
                 ) : (
-                  <MessageSquare className="h-6 w-6 text-slate-300 mx-auto" />
+                  <div className="relative w-full flex justify-center">
+                     <MessageSquare className="h-6 w-6 text-slate-300" />
+                     {chat.contractGenerated && <div className="absolute bottom-0 right-1.5 w-2 h-2 rounded-full bg-green-500 border-2 border-slate-700"></div>}
+                  </div>
                 )}
               </div>
             </li>
@@ -123,12 +118,12 @@ export function Sidebar({
       {/* User Menu */}
       <div className="p-4 border-t border-slate-700">
         <div className="flex items-center">
-          <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center font-bold text-slate-300">
             U
           </div>
-          {isSidebarOpen && (
+          {isOpen && (
             <div className="ml-3">
-              <p className="font-semibold">Usuario</p>
+              <p className="font-semibold text-slate-200">Usuario</p>
               <button
                 onClick={logout}
                 className="text-xs text-slate-400 hover:text-white"
