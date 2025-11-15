@@ -14,9 +14,7 @@ import { Toaster } from "./components/ui/sonner";
 // --- Helper para determinar si el contrato está listo ---
 const isContractReady = (chat) => {
   if (!chat) return false;
-  // Condición 1: Ya hay un contrato guardado en la BD.
   if (chat.contrato !== null && chat.contrato !== undefined) return true;
-  // Condición 2: El estado del chat indica que está listo para la vista previa.
   if (chat.metadatos?.estado === 'esperando_aprobacion_formal') return true;
   return false;
 };
@@ -60,7 +58,6 @@ function ChatApp() {
         id: `chat-${item.chat_id}`,
         title: item.nombre,
         messages: [],
-        // LÓGICA CORREGIDA AQUÍ
         contractGenerated: isContractReady(item),
         lastMessage: item.ultimo_mensaje,
         apiChatId: item.chat_id,
@@ -80,9 +77,10 @@ function ChatApp() {
     setActiveChatId(chatId);
     const chat = chats.find((c) => c.id === chatId);
     
-    // Si el chat ya tiene el estado correcto, muestra la preview inmediatamente
     if (chat && isContractReady(chat)) {
         setShowContractPreview(true);
+    } else if (chat) {
+        setShowContractPreview(false);
     }
 
     if (!chat?.apiChatId || !apiKey || (chat.messages && chat.messages.length > 0)) {
@@ -98,16 +96,14 @@ function ChatApp() {
         createdAt: new Date(msg.fecha_creacion),
       }));
 
-      setChats((prev) =>
-        prev.map((c) =>
-          c.id === chatId
-            ? { ...c, messages, contexto: detail.chat.metadatos, contractGenerated: isContractReady(detail.chat) }
-            : c
-        )
-      );
-      // LÓGICA CORREGIDA AQUÍ
-      if (isContractReady(detail.chat)) {
+      const updatedChat = { ...chat, messages, contexto: detail.chat.metadatos, contractGenerated: isContractReady(detail.chat) };
+
+      setChats((prev) => prev.map((c) => (c.id === chatId ? updatedChat : c)));
+      
+      if (isContractReady(updatedChat)) {
         setShowContractPreview(true);
+      } else {
+        setShowContractPreview(false);
       }
     } catch (error) {
       toast.error("Error al cargar la conversación: " + error.message);
@@ -133,8 +129,7 @@ function ChatApp() {
     if (!currentChat) return;
 
     const userMessage = { id: `${Date.now()}-user`, role: "user", content, createdAt: new Date() };
-    const updatedMessages = [...currentChat.messages, userMessage];
-    setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? { ...chat, messages: updatedMessages } : chat)));
+    setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? { ...chat, messages: [...chat.messages, userMessage] } : chat)));
 
     const assistantMessageId = `${Date.now()}-ai`;
     try {
@@ -157,10 +152,9 @@ function ChatApp() {
             }
             if (chunk.context) {
               newContext = chunk.context;
-              // LÓGICA CORREGIDA AQUÍ (EN TIEMPO REAL)
               if (newContext.estado === 'esperando_aprobacion_formal') {
                   contractGenerated = true;
-                  setShowContractPreview(true); // Abrir preview automáticamente
+                  setShowContractPreview(true);
               }
             }
 
@@ -183,15 +177,21 @@ function ChatApp() {
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
       />
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <ChatInterface
-          chat={currentChat}
-          onSendMessage={handleSendMessage}
-          onTogglePreview={() => setShowContractPreview(!showContractPreview)}
-          showPreview={showContractPreview}
-        />
+      {/* AHORA ESTE ES EL CONTENEDOR DE DOS COLUMNAS */}
+      <main className="flex flex-1 overflow-hidden">
+        {/* Columna 1: El chat (crece para ocupar el espacio) */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <ChatInterface
+            chat={currentChat}
+            onSendMessage={handleSendMessage}
+            onTogglePreview={() => setShowContractPreview(!showContractPreview)}
+            showPreview={showContractPreview}
+          />
+        </div>
+
+        {/* Columna 2: La vista previa del contrato (aparece cuando es necesario) */}
         {showContractPreview && currentChat?.contractGenerated && (
-          <div className="lg:w-1/2 xl:w-2/5 border-l border-slate-200 hidden lg:flex flex-col">
+          <div className="hidden lg:flex flex-col lg:w-1/2 xl:w-2/5 border-l border-slate-200">
             <ContractPreview chat={currentChat} onClose={() => setShowContractPreview(false)} />
           </div>
         )}
