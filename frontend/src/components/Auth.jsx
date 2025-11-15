@@ -1,5 +1,6 @@
 import React from 'react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { FileText, Mail, Lock, User, AlertCircle } from 'lucide-react';
 import { Button } from './ui/button';
 import { useAuth } from '../contexts/AuthContext';
@@ -153,9 +154,9 @@ export function Auth() {
           {isLogin && (
             <p className="text-center text-sm text-slate-500 mt-4">
               ¿Olvidaste tu contraseña?{' '}
-              <button className="text-blue-600 hover:underline">
+              <Link to="/forgot-password" className="font-medium text-blue-600 hover:underline">
                 Recuperar
-              </button>
+              </Link>
             </p>
           )}
         </div>
