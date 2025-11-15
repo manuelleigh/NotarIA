@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-const AuthContext = createContext(undefined);
+export const AuthContext = createContext(undefined);
 
 const API_BASE_URL = 'http://127.0.0.1:5000';
 
