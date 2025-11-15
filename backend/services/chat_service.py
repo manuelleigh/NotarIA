@@ -286,26 +286,24 @@ def revisar_clausula(clausula: str) -> str:
 
 def detectar_tipo_contrato(texto: str) -> str | None:
     """
-    Usa NLP para detectar el tipo de contrato (por sinonimia o similitud semántica).
+    Detecta el tipo de contrato buscando coincidencias directas de palabras clave.
+    Este método es más simple, rápido y robusto que el anterior.
     """
     if not texto:
         return None
 
-    doc_texto = nlp(texto.lower())
-    lemmas_texto = [token.lemma_ for token in doc_texto]
+    texto_lower = texto.lower()
 
+    # Iteramos sobre cada tipo de contrato definido para buscar coincidencias.
     for tipo, info in CONTRACTS.items():
-        sinonimos = info.get("sinonimos", [])
-        lemmas_sinonimos = [token.lemma_ for s in sinonimos for token in nlp(s.lower())]
+        # La lista de términos a buscar incluye la clave principal (ej: "arrendamiento") y sus sinónimos.
+        terminos_de_busqueda = [tipo.replace('_', ' ')] + info.get("sinonimos", [])
 
-        if any(s in lemmas_texto for s in lemmas_sinonimos):
-            return tipo
+        # Comprobamos si alguno de los términos aparece en el texto del usuario.
+        for termino in terminos_de_busqueda:
+            # Usamos `in` para una búsqueda de subcadenas simple y efectiva.
+            if termino.lower() in texto_lower:
+                return tipo  # Devolvemos el tipo de contrato en cuanto encontramos una coincidencia.
 
-        # Similaridad semántica si no hay coincidencia directa
-        for token in doc_texto:
-            for sinonimo in sinonimos:
-                similitud = token.similarity(nlp(sinonimo))
-                if similitud >= 0.75:
-                    return tipo
-
+    # Si no se encuentra ninguna coincidencia después de revisar todos los contratos, devuelve None.
     return None
