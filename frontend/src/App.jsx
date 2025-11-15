@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
 function MainApp() {
+  // Funcion Principal
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
