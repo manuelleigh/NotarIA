@@ -9,7 +9,7 @@ import os
 # En un entorno de producción, DEBES usar variables de entorno para proteger esta información.
 # Por ejemplo: os.environ.get('SMTP_USER')
 SMTP_HOST = "mail.tesegnor.net.pe"
-SMTP_PORT = 465  # Puerto SSL
+SMTP_PORT = 465
 SMTP_USER = "mleigh@tesegnor.net.pe"
 SMTP_PASS = "leigh%%2810%%" 
 SENDER_NAME = "Asistente Notarial"
