@@ -60,7 +60,7 @@ function ChatApp() {
       }));
       setChats(loadedChats);
     } catch (error) {
-      toast.error("Error al cargar historial");
+      toast.error("Error al cargar historial: " + error.message);
     } finally {
       setIsLoadingHistory(false);
     }
@@ -93,7 +93,7 @@ function ChatApp() {
       );
       setShowContractPreview(detail.contrato !== null);
     } catch (error) {
-      toast.error("Error al cargar la conversación");
+      toast.error("Error al cargar la conversación: " + error.message);
     }
   };
 
@@ -129,27 +129,40 @@ function ChatApp() {
 
     try {
       await sendChatMessageStreaming(currentChat.contexto, content, (chunk) => {
-        if (typeof chunk === 'string') {
-          setChats((prev) => {
-            return prev.map((chat) => {
-              if (chat.id === activeChatId) {
-                const lastMessage = chat.messages[chat.messages.length - 1];
-                let newMessages;
+        setChats((prev) => {
+          const newChats = prev.map((chat) => {
+            if (chat.id === activeChatId) {
+              let newMessages = [...chat.messages];
+              let newContext = chat.contexto;
+
+              // Si llega un chunk de texto, se actualiza el último mensaje
+              if (chunk.text) {
+                const lastMessage = newMessages[newMessages.length - 1];
                 if (lastMessage?.id === assistantMessageId) {
-                  newMessages = [...chat.messages.slice(0, -1), { ...lastMessage, content: lastMessage.content + chunk }];
+                  newMessages = [
+                    ...newMessages.slice(0, -1),
+                    { ...lastMessage, content: lastMessage.content + chunk.text },
+                  ];
                 } else {
-                  newMessages = [...chat.messages, { id: assistantMessageId, role: "assistant", content: chunk }];
+                  newMessages.push({ id: assistantMessageId, role: "assistant", content: chunk.text });
                 }
-                return { ...chat, messages: newMessages, messageCount: newMessages.length };
               }
-              return chat;
-            });
+
+              // Si llega una actualización de contexto, se actualiza el estado del chat
+              if (chunk.context) {
+                newContext = chunk.context;
+              }
+
+              return { ...chat, messages: newMessages, messageCount: newMessages.length, contexto: newContext };
+            }
+            return chat;
           });
-        }
+          return newChats;
+        });
       });
 
     } catch (error) {
-      toast.error("Error en el streaming");
+      toast.error("Error en la comunicación con el asistente: " + error.message);
     }
   };
 

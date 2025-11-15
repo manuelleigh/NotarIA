@@ -17,12 +17,8 @@ def create_app():
     # Inicializar extensiones
     db.init_app(app)
     migrate = Migrate(app, db)
-    CORS(
-        app,
-        resources={r"/*": {"origins": "http://localhost:3000"}},
-        allow_headers=["Authorization", "Content-Type"],
-        supports_credentials=True,
-    )
+    # --- CAMBIO: Simplificar CORS para depuración ---
+    CORS(app)
 
     app.secret_key = "LEGACY_SECRET_KEY"
     app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)

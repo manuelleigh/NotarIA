@@ -1,4 +1,5 @@
 import time
+import json
 from data.contracts_data import CONTRACTS, DEF_AFFIRMATIVES, DEF_NEGATIVES
 from services.nlp_utils import get_nlp
 
@@ -110,8 +111,8 @@ def procesar_mensaje_streaming(contexto, texto_usuario):
     else:
         yield from stream_response("No he entendido tu respuesta. ¿Podrías reformularla?")
 
-    # Al final, devolvemos el contexto actualizado
-    yield {"__contexto_actualizado__": contexto}
+    # Al final, devolvemos el contexto actualizado como un string JSON con prefijo
+    yield f"CTX_UPDATE::{json.dumps(contexto)}"
 
 # ------------------------------------------------------------
 # UTILIDADES (adaptadas de chat_service.py)
@@ -138,5 +139,4 @@ def detectar_tipo_contrato(texto: str) -> str | None:
         sinonimos = info.get("sinonimos", [])
         if any(s in texto.lower() for s in sinonimos):
             return tipo
-        # Optional: Add semantic similarity check if needed
     return None
