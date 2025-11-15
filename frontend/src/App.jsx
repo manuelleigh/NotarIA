@@ -11,6 +11,16 @@ import { getChatHistory, getChatDetail, sendChatMessageStreaming } from "./servi
 import { toast } from "sonner";
 import { Toaster } from "./components/ui/sonner";
 
+// --- Helper para determinar si el contrato está listo ---
+const isContractReady = (chat) => {
+  if (!chat) return false;
+  // Condición 1: Ya hay un contrato guardado en la BD.
+  if (chat.contrato !== null && chat.contrato !== undefined) return true;
+  // Condición 2: El estado del chat indica que está listo para la vista previa.
+  if (chat.metadatos?.estado === 'esperando_aprobacion_formal') return true;
+  return false;
+};
+
 function LoadingScreen() {
   return (
     <div className="flex items-center justify-center h-screen bg-slate-100">
@@ -38,22 +48,20 @@ function ChatApp() {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [showContractPreview, setShowContractPreview] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024); // Default to open on desktop
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024);
 
   const currentChat = chats.find((chat) => chat.id === activeChatId);
 
-  // Load initial chat history
   const loadHistory = useCallback(async () => {
     if (!apiKey) return;
-    setIsLoadingHistory(true);
     try {
       const history = await getChatHistory(apiKey);
       const loadedChats = history.map((item) => ({
         id: `chat-${item.chat_id}`,
         title: item.nombre,
         messages: [],
-        contractGenerated: item.contrato !== null,
+        // LÓGICA CORREGIDA AQUÍ
+        contractGenerated: isContractReady(item),
         lastMessage: item.ultimo_mensaje,
         apiChatId: item.chat_id,
         contexto: item.metadatos || {},
@@ -61,8 +69,6 @@ function ChatApp() {
       setChats(loadedChats);
     } catch (error) {
       toast.error("Error al cargar historial: " + error.message);
-    } finally {
-      setIsLoadingHistory(false);
     }
   }, [apiKey]);
 
@@ -70,30 +76,21 @@ function ChatApp() {
     loadHistory();
   }, [loadHistory]);
 
-  // Handle selecting a chat from the sidebar
   const handleSelectChat = async (chatId) => {
-    const selectedChat = chats.find((c) => c.id === chatId);
-    if (!selectedChat) return;
-
-    // Set active chat immediately for UI responsiveness
     setActiveChatId(chatId);
-
-    // Decide if we need to show the preview panel
-    setShowContractPreview(selectedChat.contractGenerated);
-
-    // If messages are already loaded, don't re-fetch
-    if (selectedChat.messages && selectedChat.messages.length > 0) {
-      return;
-    }
-
-    // If it's a new chat placeholder, do nothing
-    if (!selectedChat.apiChatId) {
-      return;
-    }
+    const chat = chats.find((c) => c.id === chatId);
     
-    // Fetch full chat details
+    // Si el chat ya tiene el estado correcto, muestra la preview inmediatamente
+    if (chat && isContractReady(chat)) {
+        setShowContractPreview(true);
+    }
+
+    if (!chat?.apiChatId || !apiKey || (chat.messages && chat.messages.length > 0)) {
+      return;
+    }
+
     try {
-      const detail = await getChatDetail(selectedChat.apiChatId, apiKey);
+      const detail = await getChatDetail(chat.apiChatId, apiKey);
       const messages = detail.mensajes.map((msg) => ({
         id: `msg-${msg.id}`,
         role: msg.remitente === "usuario" ? "user" : "assistant",
@@ -101,35 +98,30 @@ function ChatApp() {
         createdAt: new Date(msg.fecha_creacion),
       }));
 
-      // Update the specific chat with its full messages and contract status
       setChats((prev) =>
         prev.map((c) =>
           c.id === chatId
-            ? { ...c, messages, contractGenerated: detail.contrato !== null }
+            ? { ...c, messages, contexto: detail.chat.metadatos, contractGenerated: isContractReady(detail.chat) }
             : c
         )
       );
-       // Ensure the preview state is correct after fetching details
-      setShowContractPreview(detail.contrato !== null);
+      // LÓGICA CORREGIDA AQUÍ
+      if (isContractReady(detail.chat)) {
+        setShowContractPreview(true);
+      }
     } catch (error) {
       toast.error("Error al cargar la conversación: " + error.message);
     }
   };
 
-  // Handle creating a new chat
   const handleNewChat = () => {
     const newChat = {
       id: `new-${Date.now()}`,
       title: "Nuevo Contrato",
       messages: [
-        {
-          id: `msg-${Date.now()}`,
-          role: "assistant",
-          content: "Bienvenido. ¿Qué contrato necesita?",
-          createdAt: new Date(),
-        },
+        { id: `msg-${Date.now()}`, role: "assistant", content: "Bienvenido. ¿Qué contrato necesita?", createdAt: new Date() },
       ],
-      contractGenerated: false, 
+      contractGenerated: false,
       contexto: {},
     };
     setChats([newChat, ...chats]);
@@ -137,21 +129,12 @@ function ChatApp() {
     setShowContractPreview(false);
   };
 
-  // Handle sending a message (streaming)
   const handleSendMessage = async (content) => {
     if (!currentChat) return;
 
-    const userMessage = {
-      id: `${Date.now()}-user`,
-      role: "user",
-      content,
-      createdAt: new Date(),
-    };
-    
+    const userMessage = { id: `${Date.now()}-user`, role: "user", content, createdAt: new Date() };
     const updatedMessages = [...currentChat.messages, userMessage];
-    setChats((prev) =>
-      prev.map((chat) => (chat.id === activeChatId ? { ...chat, messages: updatedMessages } : chat))
-    );
+    setChats((prev) => prev.map((chat) => (chat.id === activeChatId ? { ...chat, messages: updatedMessages } : chat)));
 
     const assistantMessageId = `${Date.now()}-ai`;
     try {
@@ -174,17 +157,17 @@ function ChatApp() {
             }
             if (chunk.context) {
               newContext = chunk.context;
-            }
-            if (chunk.contract) {
-                contractGenerated = true;
-                setShowContractPreview(true); // Automatically show preview when contract is generated
+              // LÓGICA CORREGIDA AQUÍ (EN TIEMPO REAL)
+              if (newContext.estado === 'esperando_aprobacion_formal') {
+                  contractGenerated = true;
+                  setShowContractPreview(true); // Abrir preview automáticamente
+              }
             }
 
             return { ...chat, messages: newMessages, contexto: newContext, contractGenerated };
           });
         });
       });
-
     } catch (error) {
       toast.error("Error en la comunicación con el asistente: " + error.message);
     }
@@ -199,7 +182,6 @@ function ChatApp() {
         onNewChat={handleNewChat}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        // isLoading={isLoadingHistory} // This prop is not used in the new Sidebar
       />
       <main className="flex-1 flex flex-col overflow-hidden">
         <ChatInterface
