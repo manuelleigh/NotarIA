@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from services.chat_service import procesar_mensaje
-from services.generation_service import generar_contrato_final, generar_contrato_preview
+from services.generation_service import formalizar_contrato, generar_documento_final
 from services.chat_service_streaming import procesar_mensaje_streaming
 from models import Chat, Usuario
 from database import db
@@ -66,7 +66,7 @@ def get_documento_preview():
         return jsonify({"error": "ID de chat no proporcionado"}), 400
 
     try:
-        html_preview = generar_contrato_preview(chat_id)
+        html_preview = generar_documento_final(chat_id)
         return jsonify({"preview_html": html_preview})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -80,7 +80,7 @@ def get_documento_final():
         return jsonify({"error": "Chat ID no proporcionado."}), 400
     
     try:
-        codigo = generar_contrato_final(chat_id)
+        codigo = formalizar_contrato(chat_id)
         return jsonify({"codigo_contrato": codigo}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
