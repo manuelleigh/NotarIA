@@ -1,22 +1,37 @@
 from flask import Blueprint, request, jsonify
 from models import Usuario
 from database import db
+from werkzeug.security import generate_password_hash
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
-# @auth_bp.route('/register', methods=['POST'])
-# def register():
-#     data = request.get_json()
-#     username = data.get('username')
-#     password = data.get('password')
+@auth_bp.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    correo = data.get('correo')
+    contrasena = data.get('contrasena')
+    nombre = data.get('nombre')
 
-#     if Usuario.query.filter_by(username=username).first():
-#         return jsonify({"message": "Usuario ya existe"}), 400
+    if not correo or not contrasena or not nombre:
+        return jsonify({"message": "Faltan campos obligatorios"}), 400
 
-#     hashed_password = generate_password_hash(password, method='sha256')
-#     new_user = Usuario(username=username, password=hashed_password)
+    if Usuario.query.filter_by(correo=correo).first():
+        return jsonify({"message": "El correo ya está registrado"}), 409
 
-#     return jsonify({"message": "Usuario registrado exitosamente"}), 201
+    nuevo_usuario = Usuario(
+        correo=correo,
+        nombre=nombre,
+        rol_id=1, # Rol de usuario por defecto
+        tipo_documento_id=1, # Tipo de documento por defecto
+        numero_documento="-", # Número de documento por defecto
+    )
+    nuevo_usuario.set_password(contrasena)
+    nuevo_usuario.generate_api_key()
+
+    db.session.add(nuevo_usuario)
+    db.session.commit()
+
+    return jsonify({"api_key": nuevo_usuario.api_key, "usuario_id": nuevo_usuario.id}), 201
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
