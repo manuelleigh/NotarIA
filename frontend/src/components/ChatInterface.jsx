@@ -4,7 +4,12 @@ import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
 
-export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPreview }) {
+export function ChatInterface({
+  chat,
+  onSendMessage,
+  onTogglePreview,
+  showPreview,
+}) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef(null);
@@ -27,9 +32,13 @@ export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPrevie
   if (!chat) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center bg-slate-50">
-        <FileText className="h-16 w-16 text-slate-300"/>
-        <h2 className="mt-4 text-xl font-semibold text-slate-600">Bienvenido a tu Asistente Notarial</h2>
-        <p className="mt-2 text-slate-500">Selecciona una conversación o crea un nuevo contrato para comenzar.</p>
+        <FileText className="h-16 w-16 text-slate-300" />
+        <h2 className="mt-4 text-xl font-semibold text-slate-600">
+          Bienvenido a tu Asistente Notarial
+        </h2>
+        <p className="mt-2 text-slate-500">
+          Selecciona una conversación o crea un nuevo contrato para comenzar.
+        </p>
       </div>
     );
   }
@@ -44,7 +53,9 @@ export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPrevie
           <h2 className="font-semibold text-slate-800">{title}</h2>
           <p className="text-sm text-slate-500 mt-0.5">
             {contractGenerated ? (
-              <span className="text-green-600 font-medium">✓ Contrato generado</span>
+              <span className="text-green-600 font-medium">
+                ✓ Contrato generado
+              </span>
             ) : (
               <span>Generando contrato...</span>
             )}
@@ -63,7 +74,7 @@ export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPrevie
             }`}
           >
             <FileText className="h-4 w-4" />
-            {showPreview ? "Ocultar" : "Ver"} Contrato
+            {showPreview ? "Ocultar" : "Ver"} Preliminar
           </Button>
         )}
       </div>
@@ -87,7 +98,11 @@ export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPrevie
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isSending ? "Esperando respuesta..." : "Describa el contrato que necesita o responda..."}
+              placeholder={
+                isSending
+                  ? "Esperando respuesta..."
+                  : "Describa el contrato que necesita o responda..."
+              }
               className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white disabled:bg-slate-100"
               disabled={isSending}
             />
