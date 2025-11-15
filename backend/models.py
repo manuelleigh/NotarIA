@@ -1,10 +1,9 @@
 # models.py
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 from database import db
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.dialects.postgresql import JSONB
-from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # ---------------------------
@@ -50,6 +49,10 @@ class Usuario(db.Model):
     
     api_key = db.Column(db.String(255), unique=True, nullable=True)
 
+    # Campos para reseteo de contrasena
+    reset_token = db.Column(db.String(120), unique=True, nullable=True)
+    reset_token_expiration = db.Column(db.DateTime, nullable=True)
+
     fecha_creacion = db.Column(db.DateTime, default=datetime.utcnow)
     fecha_actualizacion = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -68,8 +71,15 @@ class Usuario(db.Model):
     def generate_api_key(self):
         self.api_key = str(uuid.uuid4())
 
+    def generate_reset_token(self):
+        self.reset_token = str(uuid.uuid4())
+        self.reset_token_expiration = datetime.utcnow() + timedelta(hours=1)
+
     def __repr__(self):
         return f"<Usuario {self.correo}>"
+
+# ... (El resto del archivo permanece igual)
+
 
 # ---------------------------
 # CHATS
@@ -198,7 +208,7 @@ class Firmante(db.Model):
 
     def generar_otp(self):
         import random
-        self.otp = f"{random.randint(100000, 999999)}"
+        self.otp = f'{random.randint(100000, 999999)}'
         self.otp_intentos = 0
 
     def __repr__(self):
