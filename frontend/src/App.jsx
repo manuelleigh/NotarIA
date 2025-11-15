@@ -13,7 +13,7 @@ import { Toaster } from "./components/ui/sonner";
 
 function LoadingScreen() {
   return (
-    <div className="flex items-center justify-center h-screen bg-slate-50">
+    <div className="flex items-center justify-center h-screen bg-slate-100">
       <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
     </div>
   );
@@ -38,20 +38,21 @@ function ChatApp() {
   const [chats, setChats] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [showContractPreview, setShowContractPreview] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024); // Default to open on desktop
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
 
   const currentChat = chats.find((chat) => chat.id === activeChatId);
 
+  // Load initial chat history
   const loadHistory = useCallback(async () => {
     if (!apiKey) return;
+    setIsLoadingHistory(true);
     try {
-      setIsLoadingHistory(true);
       const history = await getChatHistory(apiKey);
       const loadedChats = history.map((item) => ({
         id: `chat-${item.chat_id}`,
         title: item.nombre,
-        messages: [], // Los mensajes se cargarán al seleccionar el chat
+        messages: [],
         contractGenerated: item.contrato !== null,
         lastMessage: item.ultimo_mensaje,
         apiChatId: item.chat_id,
@@ -69,36 +70,53 @@ function ChatApp() {
     loadHistory();
   }, [loadHistory]);
 
+  // Handle selecting a chat from the sidebar
   const handleSelectChat = async (chatId) => {
+    const selectedChat = chats.find((c) => c.id === chatId);
+    if (!selectedChat) return;
+
+    // Set active chat immediately for UI responsiveness
     setActiveChatId(chatId);
-    const chat = chats.find((c) => c.id === chatId);
-    if (!chat?.apiChatId || !apiKey || (chat.messages && chat.messages.length > 0)) {
-      setShowContractPreview(chat?.contractGenerated || false);
+
+    // Decide if we need to show the preview panel
+    setShowContractPreview(selectedChat.contractGenerated);
+
+    // If messages are already loaded, don't re-fetch
+    if (selectedChat.messages && selectedChat.messages.length > 0) {
       return;
     }
 
+    // If it's a new chat placeholder, do nothing
+    if (!selectedChat.apiChatId) {
+      return;
+    }
+    
+    // Fetch full chat details
     try {
-      const detail = await getChatDetail(chat.apiChatId, apiKey);
+      const detail = await getChatDetail(selectedChat.apiChatId, apiKey);
       const messages = detail.mensajes.map((msg) => ({
         id: `msg-${msg.id}`,
         role: msg.remitente === "usuario" ? "user" : "assistant",
         content: msg.contenido,
-        createdAt: new Date(msg.fecha_creacion), // <-- CORREGIDO: Asegurar que createdAt es un objeto Date
+        createdAt: new Date(msg.fecha_creacion),
       }));
 
+      // Update the specific chat with its full messages and contract status
       setChats((prev) =>
         prev.map((c) =>
           c.id === chatId
-            ? { ...c, messages, contexto: detail.chat.metadatos, contractGenerated: detail.contrato !== null }
+            ? { ...c, messages, contractGenerated: detail.contrato !== null }
             : c
         )
       );
+       // Ensure the preview state is correct after fetching details
       setShowContractPreview(detail.contrato !== null);
     } catch (error) {
       toast.error("Error al cargar la conversación: " + error.message);
     }
   };
 
+  // Handle creating a new chat
   const handleNewChat = () => {
     const newChat = {
       id: `new-${Date.now()}`,
@@ -108,9 +126,10 @@ function ChatApp() {
           id: `msg-${Date.now()}`,
           role: "assistant",
           content: "Bienvenido. ¿Qué contrato necesita?",
-          createdAt: new Date(), // <-- CORREGIDO: Añadir fecha de creación
+          createdAt: new Date(),
         },
       ],
+      contractGenerated: false, 
       contexto: {},
     };
     setChats([newChat, ...chats]);
@@ -118,6 +137,7 @@ function ChatApp() {
     setShowContractPreview(false);
   };
 
+  // Handle sending a message (streaming)
   const handleSendMessage = async (content) => {
     if (!currentChat) return;
 
@@ -125,43 +145,42 @@ function ChatApp() {
       id: `${Date.now()}-user`,
       role: "user",
       content,
-      createdAt: new Date(), // <-- CORREGIDO: Añadir fecha de creación
+      createdAt: new Date(),
     };
+    
     const updatedMessages = [...currentChat.messages, userMessage];
-    const assistantMessageId = `${Date.now()}-ai`;
-
     setChats((prev) =>
       prev.map((chat) => (chat.id === activeChatId ? { ...chat, messages: updatedMessages } : chat))
     );
 
+    const assistantMessageId = `${Date.now()}-ai`;
     try {
       await sendChatMessageStreaming(currentChat.contexto, content, (chunk) => {
         setChats((prev) => {
           return prev.map((chat) => {
-            if (chat.id === activeChatId) {
-              let newMessages = [...chat.messages];
-              let newContext = chat.contexto;
+            if (chat.id !== activeChatId) return chat;
 
-              if (chunk.text) {
-                const lastMessage = newMessages[newMessages.length - 1];
-                if (lastMessage?.id === assistantMessageId) {
-                  newMessages = [
-                    ...newMessages.slice(0, -1),
-                    { ...lastMessage, content: lastMessage.content + chunk.text },
-                  ];
-                } else {
-                  // <-- CORREGIDO: Añadir fecha de creación al primer chunk del asistente
-                  newMessages.push({ id: assistantMessageId, role: "assistant", content: chunk.text, createdAt: new Date() });
-                }
+            let newMessages = [...chat.messages];
+            let newContext = chat.contexto;
+            let contractGenerated = chat.contractGenerated;
+
+            if (chunk.text) {
+              const lastMessage = newMessages[newMessages.length - 1];
+              if (lastMessage?.id === assistantMessageId) {
+                newMessages[newMessages.length - 1] = { ...lastMessage, content: lastMessage.content + chunk.text };
+              } else {
+                newMessages.push({ id: assistantMessageId, role: "assistant", content: chunk.text, createdAt: new Date() });
               }
-
-              if (chunk.context) {
-                newContext = chunk.context;
-              }
-
-              return { ...chat, messages: newMessages, contexto: newContext };
             }
-            return chat;
+            if (chunk.context) {
+              newContext = chunk.context;
+            }
+            if (chunk.contract) {
+                contractGenerated = true;
+                setShowContractPreview(true); // Automatically show preview when contract is generated
+            }
+
+            return { ...chat, messages: newMessages, contexto: newContext, contractGenerated };
           });
         });
       });
@@ -172,7 +191,7 @@ function ChatApp() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-100 text-slate-800">
       <Sidebar
         chats={chats}
         activeChat={activeChatId || ""}
@@ -180,21 +199,21 @@ function ChatApp() {
         onNewChat={handleNewChat}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        isLoading={isLoadingHistory}
+        // isLoading={isLoadingHistory} // This prop is not used in the new Sidebar
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden">
         <ChatInterface
           chat={currentChat}
           onSendMessage={handleSendMessage}
           onTogglePreview={() => setShowContractPreview(!showContractPreview)}
-          showPreview={showContractPreview && currentChat?.contractGenerated}
+          showPreview={showContractPreview}
         />
         {showContractPreview && currentChat?.contractGenerated && (
-          <div className="hidden lg:block lg:w-1/2 border-l">
+          <div className="lg:w-1/2 xl:w-2/5 border-l border-slate-200 hidden lg:flex flex-col">
             <ContractPreview chat={currentChat} onClose={() => setShowContractPreview(false)} />
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
