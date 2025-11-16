@@ -3,6 +3,7 @@ import { Send, FileText, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
+import SignersModal from "./SignersModal";
 
 export function ChatInterface({
   chat,
@@ -13,6 +14,7 @@ export function ChatInterface({
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [typingIndicator, setTypingIndicator] = useState(false);
+  const [isSignersModalOpen, setIsSignersModalOpen] = useState(false);
 
   const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -48,11 +50,64 @@ export function ChatInterface({
     if (typingIndicator) scrollToBottom();
   }, [typingIndicator]);
 
+  const handleSignersConfirm = async (signers) => {
+    setIsSignersModalOpen(false);
+
+    const message = `Okay, procede a generar el contrato con estos firmantes: ${JSON.stringify(
+      signers,
+      null,
+      2
+    )}`;
+
+    setIsSending(true);
+    setTypingIndicator(true);
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+
+    await onSendMessage(message);
+
+    setTypingIndicator(false);
+    setIsSending(false);
+
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 30);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || isSending) return;
 
     const text = input.trim();
+
+    // --- LÓGICA PARA EL MODAL DE FIRMANTES ---
+    const affirmativeKeywords = [
+      "si",
+      "sí",
+      "ok",
+      "dale",
+      "procede",
+      "continua",
+      "generalo",
+      "genéralo",
+      "acepto",
+      "confirmar",
+    ];
+    const isAffirmative = affirmativeKeywords.includes(
+      text.toLowerCase().replace(/[.,!]/g, "")
+    );
+
+    if (
+      chat?.contexto?.estado === "esperando_aprobacion_formal" &&
+      isAffirmative
+    ) {
+      setInput("");
+      setIsSignersModalOpen(true); // Abre el modal
+      return; // Detiene el envío del mensaje simple "sí"
+    }
+    // --- FIN LÓGICA MODAL ---
+
     setInput("");
     setIsSending(true);
     setTypingIndicator(true);
@@ -124,6 +179,11 @@ export function ChatInterface({
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
+      <SignersModal
+        open={isSignersModalOpen}
+        onOpenChange={setIsSignersModalOpen}
+        onConfirm={handleSignersConfirm}
+      />
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 p-4 bg-white">
         <div>
