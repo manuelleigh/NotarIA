@@ -27,7 +27,6 @@ const SignersModal = ({ open, onOpenChange, onConfirm }) => {
   };
 
   const handleConfirm = () => {
-    // Aquí se podría agregar validación antes de confirmar
     onConfirm(signers);
   };
 
