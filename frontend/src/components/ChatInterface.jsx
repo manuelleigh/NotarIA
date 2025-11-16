@@ -19,6 +19,7 @@ export function ChatInterface({
   const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  // --- Placeholder animado ---
   const animatedPlaceholder = [
     "Escribe aquí tu consulta…",
     "Por ejemplo: necesito un contrato de alquiler…",
@@ -39,6 +40,7 @@ export function ChatInterface({
     return () => clearInterval(interval);
   }, []);
 
+  // --- Scroll inteligente ---
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -79,6 +81,7 @@ export function ChatInterface({
 
     const text = input.trim();
 
+    // --- LÓGICA PARA EL MODAL DE FIRMANTES ---
     const affirmativeKeywords = [
       "si",
       "sí",
@@ -100,14 +103,16 @@ export function ChatInterface({
       isAffirmative
     ) {
       setInput("");
-      setIsSignersModalOpen(true);
-      return; // <-- ¡ESTA ES LA LÍNEA CLAVE QUE FALTABA!
+      setIsSignersModalOpen(true); // Abre el modal
+      return; // Detiene el envío del mensaje simple "sí"
     }
+    // --- FIN LÓGICA MODAL ---
 
     setInput("");
     setIsSending(true);
     setTypingIndicator(true);
 
+    // Reset height textarea
     if (inputRef.current) {
       inputRef.current.style.height = "auto";
     }
@@ -117,6 +122,7 @@ export function ChatInterface({
     setTypingIndicator(false);
     setIsSending(false);
 
+    // Focus de nuevo
     setTimeout(() => {
       inputRef.current?.focus();
     }, 30);
@@ -178,13 +184,17 @@ export function ChatInterface({
         onOpenChange={setIsSignersModalOpen}
         onConfirm={handleSignersConfirm}
       />
-
+      {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 p-4 bg-white">
         <div>
           <h2 className="font-semibold text-slate-800">{title}</h2>
           <p className="text-sm mt-0.5">
             <span className={statusDisplay.className}>
               {statusDisplay.text}
+            </span>
+            {/* DEBUG: Mostrar el estado actual del chat */}
+            <span className="ml-3 px-2 py-1 text-xs font-mono bg-red-100 text-red-700 rounded">
+              Estado: {contexto?.estado || 'N/A'}
             </span>
           </p>
         </div>
@@ -206,12 +216,14 @@ export function ChatInterface({
         )}
       </div>
 
+      {/* Mensajes */}
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6 max-w-4xl mx-auto">
           {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
           ))}
 
+          {/* Indicador de escritura */}
           {typingIndicator && (
             <div className="flex items-start gap-3 animate-pulse text-slate-500">
               <div className="w-6 h-6 rounded-full bg-slate-300"></div>
@@ -227,9 +239,11 @@ export function ChatInterface({
         </div>
       </ScrollArea>
 
+      {/* Input */}
       <div className="border-t border-slate-200 p-4 bg-white/80 backdrop-blur-sm">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
           <div className="flex gap-2 items-end">
+            {/* Textarea autogrow + enter/shift-enter */}
             <textarea
               ref={inputRef}
               value={input}
@@ -253,6 +267,7 @@ export function ChatInterface({
                          resize-none overflow-hidden leading-6 min-h-[48px] max-h-[200px]"
             />
 
+            {/* Botón enviar */}
             <Button
               type="submit"
               disabled={!input.trim() || isSending}
