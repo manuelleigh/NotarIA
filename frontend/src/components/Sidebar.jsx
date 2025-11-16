@@ -50,7 +50,7 @@ export function Sidebar({
             className="w-full bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Nuevo Contrato
+            Nuevo Chat
           </Button>
         </div>
 

@@ -5,6 +5,7 @@ from datetime import datetime
 import requests
 from datetime import datetime, timedelta
 from dateutil import parser
+from dateparser.search import search_dates
 
 from services.nlp_utils import get_nlp
 nlp = get_nlp()

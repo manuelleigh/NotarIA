@@ -4,69 +4,121 @@ import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
 
-export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPreview }) {
+export function ChatInterface({
+  chat,
+  onSendMessage,
+  onTogglePreview,
+  showPreview,
+}) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [typingIndicator, setTypingIndicator] = useState(false);
+
+  const inputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
+  // --- Placeholder animado ---
+  const animatedPlaceholder = [
+    "Escribe aquí tu consulta…",
+    "Por ejemplo: necesito un contrato de alquiler…",
+    "Describe el contrato que necesitas…",
+  ];
+
+  const [placeholderText, setPlaceholderText] = useState(
+    animatedPlaceholder[0]
+  );
+  const placeholderIndex = useRef(0);
+
   useEffect(() => {
+    const interval = setInterval(() => {
+      placeholderIndex.current =
+        (placeholderIndex.current + 1) % animatedPlaceholder.length;
+      setPlaceholderText(animatedPlaceholder[placeholderIndex.current]);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- Scroll inteligente ---
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chat?.messages]);
+  };
+
+  useEffect(scrollToBottom, [chat?.messages]);
+  useEffect(() => {
+    if (typingIndicator) scrollToBottom();
+  }, [typingIndicator]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (input.trim() && !isSending) {
-      setIsSending(true);
-      await onSendMessage(input.trim());
-      setInput("");
-      setIsSending(false);
+    if (!input.trim() || isSending) return;
+
+    const text = input.trim();
+    setInput("");
+    setIsSending(true);
+    setTypingIndicator(true);
+
+    // Reset height textarea
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
     }
+
+    await onSendMessage(text);
+
+    setTypingIndicator(false);
+    setIsSending(false);
+
+    // Focus de nuevo
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 30);
   };
 
   if (!chat) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center bg-slate-50">
-        <FileText className="h-16 w-16 text-slate-300"/>
-        <h2 className="mt-4 text-xl font-semibold text-slate-600">Bienvenido a tu Asistente Notarial</h2>
-        <p className="mt-2 text-slate-500">Selecciona una conversación o crea un nuevo contrato para comenzar.</p>
+        <FileText className="h-16 w-16 text-slate-300" />
+        <h2 className="mt-4 text-xl font-semibold text-slate-600">
+          Bienvenido a tu Asistente Notarial
+        </h2>
+        <p className="mt-2 text-slate-500">
+          Selecciona una conversación o crea un nuevo contrato para comenzar.
+        </p>
       </div>
     );
   }
 
   const { title, messages, contractGenerated, contexto } = chat;
 
-  // --- Lógica mejorada para mostrar el estado y texto del contrato ---
   const getStatusDisplay = () => {
     if (!contractGenerated) {
       return {
-        text: 'Asistente legal con IA',
-        className: 'text-slate-500',
-        buttonText: ''
+        text: "Asistente legal con IA",
+        className: "text-slate-500",
+        buttonText: "",
       };
     }
 
     switch (contexto?.estado) {
-      case 'esperando_aprobacion_formal':
+      case "esperando_aprobacion_formal":
         return {
-          text: '📄 Contrato Preliminar Disponible',
-          className: 'text-blue-600 font-medium',
-          buttonText: 'Ver Preliminar'
+          text: "📄 Contrato Preliminar Disponible",
+          className: "text-blue-600 font-medium",
+          buttonText: "Ver Preliminar",
         };
-      case 'formalizado':
+      case "formalizado":
         return {
-          text: '✓ Contrato Formalizado',
-          className: 'text-green-600 font-medium',
-          buttonText: 'Ver Formalizado'
+          text: "✓ Contrato Formalizado",
+          className: "text-green-600 font-medium",
+          buttonText: "Ver Formalizado",
         };
       default:
-        // Fallback en caso de que contractGenerated sea true pero el estado no coincida
         return {
-          text: '📄 Contrato Disponible',
-          className: 'text-green-600 font-medium',
-          buttonText: 'Ver Contrato'
+          text: "📄 Contrato Disponible",
+          className: "text-green-600 font-medium",
+          buttonText: "Ver Contrato",
         };
     }
-  }
+  };
 
   const statusDisplay = getStatusDisplay();
 
@@ -77,10 +129,12 @@ export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPrevie
         <div>
           <h2 className="font-semibold text-slate-800">{title}</h2>
           <p className="text-sm mt-0.5">
-             <span className={statusDisplay.className}>{statusDisplay.text}</span>
+            <span className={statusDisplay.className}>
+              {statusDisplay.text}
+            </span>
           </p>
         </div>
-        
+
         {contractGenerated && (
           <Button
             onClick={onTogglePreview}
@@ -98,34 +152,64 @@ export function ChatInterface({ chat, onSendMessage, onTogglePreview, showPrevie
         )}
       </div>
 
-      {/* Messages */}
+      {/* Mensajes */}
       <ScrollArea className="flex-1">
-        <div className="max-w-4xl mx-auto space-y-8 p-4 lg:p-6">
+        <div className="p-6 space-y-6 max-w-4xl mx-auto">
           {messages.map((message) => (
             <ChatMessage key={message.id} message={message} />
           ))}
-          {isSending && <ChatMessage.Loading />}
+
+          {/* Indicador de escritura */}
+          {typingIndicator && (
+            <div className="flex items-start gap-3 animate-pulse text-slate-500">
+              <div className="w-6 h-6 rounded-full bg-slate-300"></div>
+              <div className="flex space-x-2 p-3">
+                <div className="w-3 h-3 bg-slate-300 rounded-full"></div>
+                <div className="w-3 h-3 bg-slate-300 rounded-full"></div>
+                <div className="w-3 h-3 bg-slate-300 rounded-full"></div>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      {/* Input Form */}
+      {/* Input */}
       <div className="border-t border-slate-200 p-4 bg-white/80 backdrop-blur-sm">
         <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
-          <div className="flex gap-2">
-            <input
-              type="text"
+          <div className="flex gap-2 items-end">
+            {/* Textarea autogrow + enter/shift-enter */}
+            <textarea
+              ref={inputRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={isSending ? "Esperando respuesta..." : "Describa el contrato que necesita o responda..."}
-              className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white disabled:bg-slate-100"
+              placeholder={
+                isSending ? "El asistente está escribiendo..." : placeholderText
+              }
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = e.target.scrollHeight + "px";
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
               disabled={isSending}
+              className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none 
+                         focus:ring-2 focus:ring-blue-600 bg-white disabled:bg-slate-100
+                         resize-none overflow-hidden leading-6 min-h-[48px] max-h-[200px]"
             />
+
+            {/* Botón enviar */}
             <Button
               type="submit"
               disabled={!input.trim() || isSending}
               className="bg-blue-600 hover:bg-blue-700 text-white px-5 rounded-lg"
               size="icon"
+              style={{ alignSelf: "flex-end" }}
             >
               {isSending ? (
                 <Loader2 className="h-5 w-5 animate-spin" />

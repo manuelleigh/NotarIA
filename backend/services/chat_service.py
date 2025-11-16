@@ -1,3 +1,4 @@
+import time
 from models import Chat, Mensaje, Usuario
 from database import db
 from datetime import datetime
@@ -11,7 +12,22 @@ nlp = get_nlp()
 
 
 # ------------------------------------------------------------
-# FUNCIÓN PRINCIPAL: flujo de conversación del chatbot legal
+# UTILIDAD PARA STREAMING (simular "escribiendo...")
+# ------------------------------------------------------------
+def stream_response(texto_base: str, delay: float = 0.02):
+    """
+    Generador que emite la respuesta carácter por carácter para simular
+    que el chatbot está escribiendo en tiempo real.
+    """
+    if not texto_base:
+        return
+    for char in texto_base:
+        yield char
+        time.sleep(delay)
+
+
+# ------------------------------------------------------------
+# FUNCIÓN PRINCIPAL: flujo de conversación del chatbot legal (STREAMING)
 # ------------------------------------------------------------
 def procesar_mensaje(chat_id, texto_usuario, usuario_id):
     """
@@ -20,12 +36,20 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
     - Recolecta respuestas
     - Solicita confirmaciones
     - Genera contrato preliminar o formalizado
+
+    Ahora funciona en MODO STREAMING:
+    - En lugar de retornar un string, es un GENERADOR que hace yield caracter por caracter.
     """
+
     chat = Chat.query.get(chat_id)
     if not chat:
         raise ValueError("Chat no encontrado")
 
     contexto = chat.metadatos or {}
+
+    # --------------------------------------------------------
+    # LÓGICA ORIGINAL (se construye la variable `respuesta`)
+    # --------------------------------------------------------
 
     # 🧩 1. Detectar el tipo de contrato (inicio de conversación)
     if "tipo_contrato" not in contexto:
@@ -185,7 +209,9 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
     else:
         respuesta = "No entendí tu solicitud. ¿Deseas crear un nuevo contrato?"
 
-    # --- Guardar mensajes ---
+    # --------------------------------------------------------
+    # GUARDADO EN BASE DE DATOS (igual que antes)
+    # --------------------------------------------------------
     msg_usuario = Mensaje(
         chat_id=chat_id,
         contenido=texto_usuario,
@@ -207,7 +233,11 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
     chat.metadatos = contexto
     db.session.commit()
 
-    return respuesta
+    # --------------------------------------------------------
+    # STREAMING DE LA RESPUESTA
+    # --------------------------------------------------------
+    # Emitimos la respuesta carácter por carácter
+    yield from stream_response(respuesta)
 
 
 # ------------------------------------------------------------

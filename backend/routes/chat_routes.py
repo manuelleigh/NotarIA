@@ -7,8 +7,7 @@ from datetime import datetime
 from models import Usuario, Chat, Mensaje, Contrato
 
 # Services
-from services.chat_service import procesar_mensaje
-from services.chat_service_streaming import procesar_mensaje_streaming
+from services.chat_service import procesar_mensaje   # ← ahora este es streaming
 from services.generation_service import generar_documento_final, formalizar_contrato
 
 chat_bp = Blueprint("chat_bp", __name__)
@@ -21,9 +20,11 @@ def get_user_from_api_key():
     api_key = auth_header.split(" ")[1]
     return Usuario.query.filter_by(api_key=api_key).first()
 
+# ---------------------------------------------------------------------
+# HISTORIAL
+# ---------------------------------------------------------------------
 @chat_bp.route("/chat/historial", methods=["GET"])
 def get_historial():
-    """Devuelve el historial de chats de un usuario."""
     usuario = get_user_from_api_key()
     if not usuario:
         return jsonify({"error": "No autorizado"}), 401
@@ -41,12 +42,14 @@ def get_historial():
             "ultimo_mensaje": ultimo_mensaje_obj.contenido if ultimo_mensaje_obj else None,
             "metadatos": chat.metadatos,
         })
-        
+
     return jsonify({"data": historial})
 
+# ---------------------------------------------------------------------
+# DETALLE DEL CHAT
+# ---------------------------------------------------------------------
 @chat_bp.route("/chat/<int:chat_id>", methods=["GET"])
 def get_chat_detalle(chat_id):
-    """Devuelve los detalles y mensajes de un chat específico."""
     usuario = get_user_from_api_key()
     if not usuario:
         return jsonify({"error": "No autorizado"}), 401
@@ -60,23 +63,35 @@ def get_chat_detalle(chat_id):
 
     return jsonify({
         "chat": {"id": chat.id, "nombre": chat.nombre, "metadatos": chat.metadatos},
-        "mensajes": [{"id": m.id, "contenido": m.contenido, "remitente": m.remitente, "fecha_creacion": m.fecha_creacion} for m in mensajes],
+        "mensajes": [
+            {
+                "id": m.id,
+                "contenido": m.contenido,
+                "remitente": m.remitente,
+                "fecha_creacion": m.fecha_creacion
+            }
+            for m in mensajes
+        ],
         "contrato": {"id": contrato.id} if contrato else None,
     })
 
-@chat_bp.route("/chat", methods=["POST"])
-def handle_chat_legacy():
-    """Maneja el envío de mensajes no-streaming y la creación de chats."""
+# ---------------------------------------------------------------------
+# CHAT STREAMING (FLUJO DE CONVERSACIÓN)
+# ---------------------------------------------------------------------
+@chat_bp.route("/chat/streaming", methods=["POST"])
+def handle_chat_streaming():
     usuario = get_user_from_api_key()
     if not usuario:
         return jsonify({"error": "No autorizado"}), 401
     
     data = request.json
     mensaje = data.get("mensaje")
-    if not mensaje:
-        return jsonify({"error": "Falta el mensaje"}), 400
-
     chat_id = data.get("chat_id")
+
+    if not mensaje:
+        return jsonify({"error": "Mensaje no proporcionado"}), 400
+
+    # Si no existe chat, crear uno
     if not chat_id:
         nuevo_chat = Chat(
             usuario_id=usuario.id,
@@ -87,27 +102,18 @@ def handle_chat_legacy():
         db.session.commit()
         chat_id = nuevo_chat.id
 
-    respuesta = procesar_mensaje(chat_id, mensaje, usuario.id)
-    return jsonify({"response": respuesta, "chat_id": chat_id})
-
-@chat_bp.route("/chat/streaming", methods=["POST"])
-def handle_chat_streaming():
-    """Maneja el chat con respuesta en streaming."""
-    data = request.json
-    contexto = data.get("contexto")
-    texto_usuario = data.get("message")
-    if not texto_usuario:
-        return jsonify({"error": "Mensaje no proporcionado"}), 400
-
     def generate():
-        for chunk in procesar_mensaje_streaming(contexto, texto_usuario):
+        # Streaming real: cada chunk (caracter) se envía al cliente
+        for chunk in procesar_mensaje(chat_id, mensaje, usuario.id):
             yield chunk
 
-    return Response(stream_with_context(generate()), mimetype='text/plain')
+    return Response(stream_with_context(generate()), mimetype="text/plain")
 
+# ---------------------------------------------------------------------
+# DOCUMENTO HTML PREVIEW 
+# ---------------------------------------------------------------------
 @chat_bp.route("/chat/documento", methods=["GET"])
 def get_documento_preview_html():
-    """Devuelve la vista previa del contrato en formato HTML."""
     chat_id = request.args.get("chat_id")
     if not chat_id:
         return jsonify({"error": "ID de chat no proporcionado"}), 400
@@ -115,12 +121,13 @@ def get_documento_preview_html():
         html_preview = generar_documento_final(chat_id)
         return Response(html_preview, mimetype='text/html')
     except Exception as e:
-        # Devuelve un 500 para errores internos del servidor
         return jsonify({"error": str(e)}), 500
 
+# ---------------------------------------------------------------------
+# FORMALIZAR DOCUMENTO FINAL
+# ---------------------------------------------------------------------
 @chat_bp.route("/documento/final", methods=["POST"])
 def formalize_documento():
-    """Formaliza un contrato y lo guarda en la base de datos."""
     chat_id = request.json.get("chat_id")
     if not chat_id:
         return jsonify({"error": "Chat ID no proporcionado"}), 400
