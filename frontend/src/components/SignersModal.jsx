@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +10,6 @@ import {
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { useState } from "react";
 
 const SignersModal = ({ open, onOpenChange, onConfirm }) => {
   const [signers, setSigners] = useState([{ nombre: "", correo: "", telefono: "" }]);
