@@ -50,9 +50,10 @@ export async function sendChatMessageStreaming(
   mensaje,
   apiKey,
   nombre,
+  contexto,
   onChunk
 ) {
-  const body = { mensaje, chat_id: apiChatId, nombre };
+  const body = { mensaje, chat_id: apiChatId, nombre, contexto };
 
   const response = await fetch(`${API_BASE_URL}/chat/streaming`, {
     method: "POST",
@@ -63,6 +64,12 @@ export async function sendChatMessageStreaming(
     body: JSON.stringify(body),
   });
 
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Streaming error:", errorText);
+    throw new Error("Error en streaming");
+  }
+
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
 
@@ -70,8 +77,16 @@ export async function sendChatMessageStreaming(
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value, { stream: true });
-    if (onChunk) onChunk(chunk);
+    const text = decoder.decode(value, { stream: true });
+
+    let parsed = {};
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = { text }; // si no es JSON, es chunk de texto
+    }
+
+    if (onChunk) onChunk(parsed);
   }
 }
 

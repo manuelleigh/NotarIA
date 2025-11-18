@@ -5,6 +5,60 @@ import { ScrollArea } from "./ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
 import SignersModal from "./SignersModal";
 
+const ROLE_KEYS = [
+  "arrendador",
+  "arrendatario",
+  "prestador",
+  "cliente",
+  "vendedor",
+  "comprador",
+  "comodante",
+  "comodatario",
+  "mutuante",
+  "mutuario",
+  "deudor",
+  "acreedor",
+  "empleador",
+  "trabajador",
+  "poderdante",
+  "apoderado",
+  "franquiciante",
+  "franquiciado",
+  "anunciante",
+  "publicista",
+  "asociante",
+  "asociado",
+];
+
+function parsePersona(texto = "") {
+  if (!texto) return { nombre: "", dni: "" };
+  const dniMatch = texto.match(/\b(\d{8})\b/);
+  const dni = dniMatch ? dniMatch[0] : "";
+  let nombre = texto.replace(dni, "");
+  nombre = nombre.split(/,| y | con domicilio/i)[0].trim();
+  return { nombre, dni };
+}
+
+function getDefaultSigners(contexto) {
+  if (!contexto?.respuestas) return [];
+
+  const signers = [];
+
+  ROLE_KEYS.forEach((role) => {
+    const raw = contexto.respuestas[role];
+    if (raw) {
+      signers.push({
+        role,
+        ...parsePersona(raw),
+        correo: "",
+        telefono: "",
+      });
+    }
+  });
+
+  return signers;
+}
+
 export function ChatInterface({
   chat,
   onSendMessage,
@@ -91,17 +145,22 @@ export function ChatInterface({
       "acepto",
       "confirmar",
     ];
-    
-    const textNormalized = text.toLowerCase().replace(/[.,!]/g, "");
-    const isAffirmative = affirmativeKeywords.some(keyword => textNormalized.includes(keyword));
 
-    if (
-      chat?.contexto?.estado === "esperando_aprobacion_formal" &&
-      isAffirmative
-    ) {
+    const textNormalized = text.toLowerCase().replace(/[.,!]/g, "");
+    const isAffirmative = affirmativeKeywords.some((keyword) =>
+      textNormalized.includes(keyword)
+    );
+
+    // 🚀 NUEVA LÓGICA
+    const isPreliminar =
+      chat?.estado === "esperando_aprobacion_formal" ||
+      chat?.estado === "generando_contrato" ||
+      chat?.estado === "formalizado";
+
+    if (isPreliminar && isAffirmative) {
       setInput("");
-      setIsSignersModalOpen(true); 
-      return; 
+      setIsSignersModalOpen(true);
+      return;
     }
 
     setInput("");
@@ -150,19 +209,19 @@ export function ChatInterface({
     switch (contexto?.estado) {
       case "esperando_aprobacion_formal":
         return {
-          text: "📄 Contrato Preliminar Disponible",
+          text: "Contrato Preliminar Disponible",
           className: "text-blue-600 font-medium",
           buttonText: "Ver Preliminar",
         };
       case "formalizado":
         return {
-          text: "✓ Contrato Formalizado",
+          text: "Contrato Formalizado",
           className: "text-green-600 font-medium",
           buttonText: "Ver Formalizado",
         };
       default:
         return {
-          text: "📄 Contrato Disponible",
+          text: "Contrato Disponible",
           className: "text-green-600 font-medium",
           buttonText: "Ver Contrato",
         };
@@ -176,6 +235,7 @@ export function ChatInterface({
       <SignersModal
         open={isSignersModalOpen}
         onOpenChange={setIsSignersModalOpen}
+        defaultSigners={getDefaultSigners(chat.contexto)}
         onConfirm={handleSignersConfirm}
       />
 

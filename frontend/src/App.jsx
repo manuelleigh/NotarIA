@@ -68,6 +68,13 @@ function ChatApp() {
 
   const currentChat = chats.find((c) => c.id === activeChatId);
 
+  const contexto = {
+    estado: currentChat?.estado ?? null,
+    respuestas: currentChat?.respuestas ?? {},
+    tipo_contrato: currentChat?.tipoContrato ?? null,
+    clausulas_especiales: currentChat?.clausulasEspeciales ?? [],
+  };
+
   // -------------------------------
   // Load chat history
   // -------------------------------
@@ -187,62 +194,76 @@ function ChatApp() {
     const assistantMessageId = `${Date.now()}-ai`;
 
     try {
-      await sendChatMessageStreaming(currentChat.contexto, content, (chunk) => {
-        let shouldOpenPreview = false;
-        let updatedContext = null;
+      const contexto = {
+        estado: currentChat.estado,
+        respuestas: currentChat.respuestas,
+        tipo_contrato: currentChat.tipoContrato,
+        clausulas_especiales: currentChat.clausulasEspeciales,
+      };
 
-        if (chunk.context) {
-          updatedContext = chunk.context;
+      await sendChatMessageStreaming(
+        currentChat.apiChatId,
+        content,
+        apiKey,
+        "Usuario",
+        contexto,
+        (chunk) => {
+          let shouldOpenPreview = false;
+          let updatedContext = null;
 
-          if (updatedContext.estado === "esperando_aprobacion_formal") {
-            shouldOpenPreview = true;
+          if (chunk.context) {
+            updatedContext = chunk.context;
+
+            if (updatedContext.estado === "esperando_aprobacion_formal") {
+              shouldOpenPreview = true;
+            }
+          }
+
+          setChats((prev) =>
+            prev.map((chat) => {
+              if (chat.id !== activeChatId) return chat;
+
+              let newMessages = [...chat.messages];
+              let newContext = chat.contexto;
+              let contractGenerated = chat.contractGenerated;
+
+              if (chunk.text) {
+                const last = newMessages[newMessages.length - 1];
+
+                if (last?.id === assistantMessageId) {
+                  last.content += chunk.text;
+                } else {
+                  newMessages.push({
+                    id: assistantMessageId,
+                    role: "assistant",
+                    content: chunk.text,
+                    createdAt: new Date(),
+                  });
+                }
+              }
+
+              if (updatedContext) {
+                newContext = updatedContext;
+
+                if (updatedContext.estado === "esperando_aprobacion_formal") {
+                  contractGenerated = true;
+                }
+              }
+
+              return {
+                ...chat,
+                messages: newMessages,
+                contexto: newContext,
+                contractGenerated,
+              };
+            })
+          );
+
+          if (shouldOpenPreview) {
+            setShowContractPreview(true);
           }
         }
-
-        setChats((prev) =>
-          prev.map((chat) => {
-            if (chat.id !== activeChatId) return chat;
-
-            let newMessages = [...chat.messages];
-            let newContext = chat.contexto;
-            let contractGenerated = chat.contractGenerated;
-
-            if (chunk.text) {
-              const last = newMessages[newMessages.length - 1];
-
-              if (last?.id === assistantMessageId) {
-                last.content += chunk.text;
-              } else {
-                newMessages.push({
-                  id: assistantMessageId,
-                  role: "assistant",
-                  content: chunk.text,
-                  createdAt: new Date(),
-                });
-              }
-            }
-
-            if (updatedContext) {
-              newContext = updatedContext;
-
-              if (updatedContext.estado === "esperando_aprobacion_formal") {
-                contractGenerated = true;
-              }
-            }
-
-            return {
-              ...chat,
-              messages: newMessages,
-              contexto: newContext,
-              contractGenerated,
-            };
-          })
-        );
-
-        if (shouldOpenPreview) {
-          setShowContractPreview(true);
-        }
-      });
+      );
     } catch (error) {
       toast.error(
         "Error en la comunicación con el asistente: " + error.message

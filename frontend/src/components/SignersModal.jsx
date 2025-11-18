@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,14 +7,20 @@ import {
   DialogDescription,
   DialogFooter,
   DialogPortal,
-  DialogOverlay
+  DialogOverlay,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
-const SignersModal = ({ open, onOpenChange, onConfirm }) => {
-  const [signers, setSigners] = useState([{ nombre: "", correo: "", telefono: "" }]);
+const SignersModal = ({ open, onOpenChange, onConfirm, defaultSigners }) => {
+  const [signers, setSigners] = useState(defaultSigners || []);
+
+  useEffect(() => {
+    if (open) {
+      setSigners(defaultSigners || []);
+    }
+  }, [open, defaultSigners]);
 
   const handleSignerChange = (index, field, value) => {
     const newSigners = [...signers];
@@ -38,7 +44,8 @@ const SignersModal = ({ open, onOpenChange, onConfirm }) => {
           <DialogHeader>
             <DialogTitle>Información de los Firmantes</DialogTitle>
             <DialogDescription>
-              Por favor, ingresa los datos de las personas que firmarán el contrato.
+              Por favor, ingresa los datos de las personas que firmarán el
+              contrato.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -51,16 +58,31 @@ const SignersModal = ({ open, onOpenChange, onConfirm }) => {
                     <Input
                       id={`nombre-${index}`}
                       value={signer.nombre}
-                      onChange={(e) => handleSignerChange(index, "nombre", e.target.value)}
+                      onChange={(e) =>
+                        handleSignerChange(index, "nombre", e.target.value)
+                      }
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor={`correo-${index}`}>Correo electrónico</Label>
+                    <Label>DNI</Label>
+                    <Input
+                      value={signer.dni}
+                      onChange={(e) =>
+                        handleSignerChange(index, "dni", e.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`correo-${index}`}>
+                      Correo electrónico
+                    </Label>
                     <Input
                       id={`correo-${index}`}
                       type="email"
                       value={signer.correo}
-                      onChange={(e) => handleSignerChange(index, "correo", e.target.value)}
+                      onChange={(e) =>
+                        handleSignerChange(index, "correo", e.target.value)
+                      }
                     />
                   </div>
                   <div className="space-y-1">
@@ -68,7 +90,9 @@ const SignersModal = ({ open, onOpenChange, onConfirm }) => {
                     <Input
                       id={`telefono-${index}`}
                       value={signer.telefono}
-                      onChange={(e) => handleSignerChange(index, "telefono", e.target.value)}
+                      onChange={(e) =>
+                        handleSignerChange(index, "telefono", e.target.value)
+                      }
                     />
                   </div>
                 </div>
@@ -79,8 +103,12 @@ const SignersModal = ({ open, onOpenChange, onConfirm }) => {
             </Button>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button onClick={handleConfirm}>Confirmar y Generar Contrato</Button>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirm}>
+              Confirmar y Generar Contrato
+            </Button>
           </DialogFooter>
         </DialogContent>
       </DialogPortal>
