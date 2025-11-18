@@ -1,4 +1,5 @@
 import time
+import json
 from models import Chat, Mensaje, Usuario
 from database import db
 from datetime import datetime
@@ -7,52 +8,45 @@ from services.generation_service import formalizar_contrato
 from services.data_processors import PROCESSOR_REGISTRY
 from services.nlp_utils import get_nlp
 
-# Inicializamos el modelo NLP (spaCy)
 nlp = get_nlp()
 
-
-# ------------------------------------------------------------
-# UTILIDAD PARA STREAMING (simular "escribiendo...")
-# ------------------------------------------------------------
 def stream_response(texto_base: str, delay: float = 0.02):
-    """
-    Generador que emite la respuesta carácter por carácter para simular
-    que el chatbot está escribiendo en tiempo real.
-    """
     if not texto_base:
         return
     for char in texto_base:
         yield char
         time.sleep(delay)
 
-
-# ------------------------------------------------------------
-# FUNCIÓN PRINCIPAL: flujo de conversación del chatbot legal (STREAMING)
-# ------------------------------------------------------------
 def procesar_mensaje(chat_id, texto_usuario, usuario_id):
-    """
-    Controla el flujo conversacional:
-    - Detecta el tipo de contrato
-    - Recolecta respuestas
-    - Solicita confirmaciones
-    - Genera contrato preliminar o formalizado
-
-    Ahora funciona en MODO STREAMING:
-    - En lugar de retornar un string, es un GENERADOR que hace yield caracter por caracter.
-    """
-
     chat = Chat.query.get(chat_id)
     if not chat:
         raise ValueError("Chat no encontrado")
 
-    contexto = chat.metadatos or {}
+    # SOLUCIÓN CLAVE: Usar .copy() para que SQLAlchemy detecte el cambio en el JSON.
+    contexto = (chat.metadatos or {}).copy()
 
-    # --------------------------------------------------------
-    # LÓGICA ORIGINAL (se construye la variable `respuesta`)
-    # --------------------------------------------------------
+    # --- ANÁLISIS DE MENSAJE ESPECIAL (con firmantes) ---
+    is_signers_confirmation = texto_usuario.startswith("Okay, procede a generar el contrato con estos firmantes:")
+    
+    if is_signers_confirmation:
+        try:
+            json_str = texto_usuario.split("Okay, procede a generar el contrato con estos firmantes:")[1].strip()
+            firmantes = json.loads(json_str)
+            
+            codigo_contrato = formalizar_contrato(chat_id, firmantes_extra=firmantes)
+            contexto["estado"] = "formalizado"
+            contexto["codigo_contrato"] = codigo_contrato
 
-    # 🧩 1. Detectar el tipo de contrato (inicio de conversación)
-    if "tipo_contrato" not in contexto:
+            respuesta = (
+                f"¡Perfecto! ✅ Se ha formalizado tu contrato con todos los firmantes.\n\n"
+                f"**Código de Contrato:** {codigo_contrato}"
+            )
+        except Exception as e:
+            print(f"Error en formalización con firmantes: {e}")
+            respuesta = "⚠️ Hubo un error al procesar los firmantes y formalizar el contrato. Por favor, intenta de nuevo."
+    
+    # --- FLUJO DE CONVERSACIÓN NORMAL ---
+    elif "tipo_contrato" not in contexto:
         tipo = detectar_tipo_contrato(texto_usuario)
         if tipo:
             contexto["tipo_contrato"] = tipo
@@ -71,7 +65,6 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
                 "Por ejemplo: arrendamiento, compraventa o prestación de servicios."
             )
 
-    # 🧩 2. Recolectando respuestas del usuario
     elif contexto.get("estado") == "solicitando_datos":
         tipo = contexto["tipo_contrato"]
         i = contexto.get("pregunta_actual", 0)
@@ -82,7 +75,6 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
         respuestas[clave_semantica] = texto_usuario
         contexto["respuestas"] = respuestas
 
-        # Pasar a la siguiente pregunta o finalizar la recolección
         if i + 1 < len(CONTRACTS[tipo]["preguntas"]):
             contexto["pregunta_actual"] = i + 1
             siguiente = CONTRACTS[tipo]["preguntas"][i + 1]["texto"]
@@ -95,7 +87,6 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
                 "¿Deseas que te muestre un resumen antes de generar el documento?"
             )
 
-    # 🧩 3. Mostrar resumen para revisión
     elif contexto.get("estado") == "revision" and es_afirmativo(texto_usuario):
         tipo = contexto["tipo_contrato"]
         respuestas = contexto.get("respuestas", {})
@@ -117,33 +108,27 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
         respuesta = resumen
         contexto["estado"] = "preliminar_confirmacion"
 
-    # 🧩 4. Confirmación antes de generar el contrato
     elif contexto.get("estado") == "preliminar_confirmacion":
-        txt_norm = texto_normalizado(texto_usuario)
-
-        if es_afirmativo(txt_norm):
+        if es_afirmativo(texto_usuario):
             contexto["estado"] = "clausulas_especiales"
             respuesta = (
                 "Perfecto 👍. Antes de generar el contrato preliminar, "
                 "¿deseas agregar alguna cláusula especial o condición adicional? "
                 "Por ejemplo: penalidades, ampliaciones o condiciones de pago."
             )
-        elif es_negativo(txt_norm):
+        elif es_negativo(texto_usuario):
             respuesta = "Entendido. ¿Qué información te gustaría corregir o agregar?"
         else:
             respuesta = (
                 "Por favor, responde 'sí' para confirmar o 'no' si deseas modificar algún dato."
             )
 
-    # 🧩 5. Registro de cláusulas especiales
     elif contexto.get("estado") == "clausulas_especiales":
-        txt_norm = texto_normalizado(texto_usuario)
-
-        if es_negativo(txt_norm):
-            contexto["estado"] = "esperando_aprobacion_formal"
+        if es_negativo(texto_usuario):
+            contexto["estado"] = "generando_contrato"
             contexto["clausulas_especiales"] = []
             respuesta = "Perfecto. Procederé a generar el contrato preliminar sin cláusulas adicionales."
-        elif es_afirmativo(txt_norm):
+        elif es_afirmativo(texto_usuario):
             contexto["estado"] = "registrando_clausulas"
             respuesta = (
                 "Muy bien. Escribe las cláusulas o condiciones que quieras incluir.\n"
@@ -154,12 +139,8 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
             contexto["clausulas_especiales"].append(texto_usuario)
             respuesta = "Cláusula registrada ✅. ¿Deseas agregar otra más o continuamos con el contrato?"
 
-    # 🧩 6. Registro múltiple de cláusulas
     elif contexto.get("estado") == "registrando_clausulas":
-        txt_norm = texto_normalizado(texto_usuario)
-        if es_negativo(txt_norm):
-            clausulas = contexto.get("clausulas_especiales", [])
-            contexto["clausulas_validadas"] = [revisar_clausula(c) for c in clausulas]
+        if es_negativo(texto_usuario):
             contexto["estado"] = "generando_contrato"
             respuesta = "Entendido. Procederé a generar el contrato con las cláusulas registradas."
         else:
@@ -167,51 +148,18 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
             contexto["clausulas_especiales"].append(texto_usuario)
             respuesta = "Cláusula agregada ✅. ¿Deseas incluir otra más?"
 
-    # 🧩 7. Estado generando contrato (trigger para /documento)
-    elif contexto.get("estado") == "generando_contrato":
-        respuesta = (
-            "Perfecto. Estoy generando el documento preliminar. "
-            "Un momento por favor..."
-        )
-
-    # 🧩 8. Esperando aprobación formal
     elif contexto.get("estado") == "esperando_aprobacion_formal":
-        txt_norm = texto_normalizado(texto_usuario)
+        respuesta = "Por favor, responde 'sí' para abrir el formulario de firmantes o 'no' para revisar los datos."
 
-        if es_afirmativo(txt_norm):
-            try:
-                codigo_contrato = formalizar_contrato(chat_id)
-                contexto["estado"] = "formalizado"
-                contexto["codigo_contrato"] = codigo_contrato
-
-                respuesta = (
-                    f"¡Perfecto! ✅ Se ha formalizado tu contrato.\n\n"
-                    f"**Código de Contrato:** {codigo_contrato}\n\n"
-                    "¿Deseas que prepare el envío a la plataforma de firma (Keynua)?"
-                )
-            except Exception as e:
-                print(f"Error en formalización: {e}")
-                respuesta = "⚠️ Error al intentar formalizar el contrato. Intenta nuevamente."
-        elif es_negativo(txt_norm):
-            contexto["estado"] = "revision"
-            respuesta = "Entendido. Volvamos a la revisión. ¿Deseas ver el resumen de nuevo?"
-        else:
-            respuesta = "Por favor, responde 'sí' para aprobar o 'no' para revisar."
-
-    # 🧩 9. Estado final (contrato ya formalizado)
     elif contexto.get("estado") == "formalizado":
         respuesta = (
             f"Este chat ya generó el contrato {contexto.get('codigo_contrato')}.\n"
             "¿Deseas crear un nuevo contrato?"
         )
-        contexto = {}
 
     else:
-        respuesta = "No entendí tu solicitud. ¿Deseas crear un nuevo contrato?"
+        respuesta = "No entendí tu solicitud. ¿Podrías ser más específico?"
 
-    # --------------------------------------------------------
-    # GUARDADO EN BASE DE DATOS (igual que antes)
-    # --------------------------------------------------------
     msg_usuario = Mensaje(
         chat_id=chat_id,
         contenido=texto_usuario,
@@ -229,111 +177,32 @@ def procesar_mensaje(chat_id, texto_usuario, usuario_id):
     )
     db.session.add(msg_sistema)
 
-    # Actualizar metadatos
     chat.metadatos = contexto
     db.session.commit()
 
-    # --------------------------------------------------------
-    # STREAMING DE LA RESPUESTA
-    # --------------------------------------------------------
-    # Emitimos la respuesta carácter por carácter
     yield from stream_response(respuesta)
 
-
-# ------------------------------------------------------------
-# PROCESAMIENTO DE DATOS DEL CONTRATO
-# ------------------------------------------------------------
-def procesar_datos_contrato(tipo_contrato: str, respuestas_usuario: dict) -> dict:
-    """
-    Usa los procesadores definidos en data_processors.py según el tipo de contrato.
-    Retorna un diccionario estructurado listo para usar en las plantillas Jinja2.
-    """
-    if tipo_contrato not in CONTRACTS:
-        raise ValueError(f"Tipo de contrato no reconocido: {tipo_contrato}")
-
-    contrato_config = CONTRACTS[tipo_contrato]
-    datos_procesados = {}
-
-    for campo in contrato_config.get("preguntas", []):
-        nombre_campo = campo["key"]
-        tipo_dato = campo.get("tipo_dato")
-        valor_usuario = respuestas_usuario.get(nombre_campo, "")
-
-        procesador = PROCESSOR_REGISTRY.get(tipo_dato)
-        if procesador:
-            try:
-                resultado = procesador(valor_usuario)
-                datos_procesados[nombre_campo] = resultado
-            except Exception as e:
-                print(f"⚠️ Error procesando campo '{nombre_campo}': {e}")
-                datos_procesados[nombre_campo] = valor_usuario
-        else:
-            datos_procesados[nombre_campo] = valor_usuario
-
-    # Si existe un procesador global para el tipo de contrato
-    procesador_contrato = PROCESSOR_REGISTRY.get(tipo_contrato)
-    if procesador_contrato:
-        try:
-            datos_finales = procesador_contrato(datos_procesados)
-        except Exception as e:
-            print(f"⚠️ Error aplicando procesador del contrato '{tipo_contrato}': {e}")
-            datos_finales = datos_procesados
-    else:
-        datos_finales = datos_procesados
-
-    return datos_finales
-
-
-# ------------------------------------------------------------
-# UTILIDADES NLP
-# ------------------------------------------------------------
 def texto_normalizado(texto: str) -> str:
     if not texto:
         return ""
     doc = nlp(texto.strip().lower())
     return " ".join([token.lemma_ for token in doc])
 
-
 def es_afirmativo(texto: str) -> bool:
-    txt = texto_normalizado(texto)
-    return txt in DEF_AFFIRMATIVES or txt.startswith("si ")
-
+    txt_norm = texto.lower().strip().replace('.', '')
+    return any(af in txt_norm.split() for af in DEF_AFFIRMATIVES)
 
 def es_negativo(texto: str) -> bool:
-    txt = texto_normalizado(texto)
-    return txt in DEF_NEGATIVES or txt.startswith("no ")
-
-
-def revisar_clausula(clausula: str) -> str:
-    clausula_lower = clausula.lower()
-    if "violencia" in clausula_lower or "ilegal" in clausula_lower:
-        return "⚠️ Esta cláusula parece contener términos inapropiados o no válidos legalmente."
-    elif "pena" in clausula_lower or "multa" in clausula_lower:
-        return "✔️ Cláusula de penalidad detectada. Se incluirá con redacción formal estándar."
-    else:
-        return "✔️ Cláusula revisada y considerada válida."
-
+    txt_norm = texto.lower().strip().replace('.', '')
+    return any(neg in txt_norm.split() for neg in DEF_NEGATIVES)
 
 def detectar_tipo_contrato(texto: str) -> str | None:
-    """
-    Detecta el tipo de contrato buscando coincidencias directas de palabras clave.
-    Este método es más simple, rápido y robusto que el anterior.
-    """
     if not texto:
         return None
-
     texto_lower = texto.lower()
-
-    # Iteramos sobre cada tipo de contrato definido para buscar coincidencias.
     for tipo, info in CONTRACTS.items():
-        # La lista de términos a buscar incluye la clave principal (ej: "arrendamiento") y sus sinónimos.
         terminos_de_busqueda = [tipo.replace('_', ' ')] + info.get("sinonimos", [])
-
-        # Comprobamos si alguno de los términos aparece en el texto del usuario.
         for termino in terminos_de_busqueda:
-            # Usamos `in` para una búsqueda de subcadenas simple y efectiva.
             if termino.lower() in texto_lower:
-                return tipo  # Devolvemos el tipo de contrato en cuanto encontramos una coincidencia.
-
-    # Si no se encuentra ninguna coincidencia después de revisar todos los contratos, devuelve None.
+                return tipo
     return None
